@@ -1,0 +1,309 @@
+\documentclass[12pt,preprint]{aastex}
+\usepackage{amssymb,amsmath}
+%\usepackage{color,hyperref}
+% hypertex insanity
+%\definecolor{linkcolor}{rgb}{0,0,0.25}
+%\hypersetup{
+%  colorlinks=true,        % false: boxed links; true: colored links
+%  linkcolor=linkcolor,    % color of internal links
+%  citecolor=linkcolor,    % color of links to bibliography
+%  filecolor=linkcolor,    % color of file links
+%  urlcolor=linkcolor      % color of external links
+%}
+\newcounter{address}
+\setcounter{address}{1}
+%\usepackage{sidecap}
+\setlength{\emergencystretch}{2em}%No overflowing references
+\newcommand{\ie}{i.e.}
+\newcommand{\etal}{et al.}
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\eg}{e.g.}
+\newcommand{\eqnname}{equation}
+\newcommand{\equationname}{\eqnname}
+\newcommand{\figurenames}{\figurename s}
+
+\newcommand{\zsun}{\ensuremath{z_\odot}}
+\newcommand{\vz}{\ensuremath{v_z}}
+\newcommand{\vzi}{\ensuremath{v_{z,i}}}
+\newcommand{\zi}{\ensuremath{z_i}}
+\newcommand{\wi}{\ensuremath{w_i}}
+\newcommand{\Ei}{\ensuremath{E_i}}
+\newcommand{\Ai}{\ensuremath{A_i}}
+\newcommand{\phii}{\ensuremath{\phi_i}}
+\newcommand{\zobs}{\ensuremath{\tilde{z}}}
+\newcommand{\eps}{\ensuremath{\epsilon}}
+
+\begin{document}
+
+\title{Harmonic-oscillator M2M}
+\author{Jo~Bovy\altaffilmark{1,2,3}}
+\altaffiltext{\theaddress}{\label{1}\stepcounter{address}
+  Department of Astronomy and Astrophysics, University of Toronto, 50
+  St.  George Street, Toronto, ON, M5S 3H4, Canada;
+  bovy@astro.utoronto.ca~}
+\altaffiltext{\theaddress}{\label{2}\stepcounter{address} 
+  Center for Computational Astrophysics, Flatiron Institute, 162 5th Ave, New York, NY 10010, USA}
+\altaffiltext{\theaddress}{\label{3}\stepcounter{address}
+  Alfred~P.~Sloan~Fellow}
+
+\begin{abstract} 
+  This note presents some enhancements to the standard
+  \emph{made-to-measure} (M2M) approach for fitting steady-state
+  distribution functions to kinematic data in the context of a simple
+  one-dimensional harmonic-oscillator potential. Specifically, this
+  note aims to do the following:\\
+  $\bullet$ Fit for nuisance parameters in addition to the orbital
+  weights; specifically, fit for the Sun's height \zsun\ above the
+  midplane;\\ $\bullet$ Fit for the parameters of the potential;
+  specifically, fit for the period $\omega$ of the harmonic
+  oscillator;\\ $\bullet$ Run MCMC for the weights using Hybrid Monte
+  Carlo;\\ $\bullet$ Run MCMC for the nuisance parameters using Hybrid
+  Monte Carlo as well;\\ $\bullet$ Run MCMC for the potential
+  parameters.\\
+  With these improvements, M2M can be used to fully fit observable
+  data and return proper uncertainties on all parameters.
+\end{abstract}
+
+\section{Online material}
+
+These notes accompany an online ipython notebook that contains
+experiments and figures using the methodology below. This notebook is
+located at
+\\ \centerline{\texttt{\url{https://github.com/jobovy/simple-m2m/blob/master/py/HOM2M.ipynb}}}
+The few movies that are part of this notebook can only be viewed on nbviewer at
+\\ \centerline{\footnotesize \texttt{\url{http://nbviewer.jupyter.org/github/jobovy/simple-m2m/blob/master/py/HOM2M.ipynb}}}.
+
+\section{Introduction}
+
+For now, the reader is assumed to be familiar with the standard
+made-to-measure modeling technique. If not, \citet{Syer96a} and
+\citet{Dehnen09a} are useful references to get started.
+
+\section{Setup}
+
+We consider a simple one-dimensional system where the potential is a
+simple harmonic oscillator. The phase-space coordinates are $(z,\vz)$
+and the potential is
+\begin{equation}
+  \Phi(z) = \frac{\omega^2\,z^2}{2}\,.
+\end{equation}
+In this potential, we attempt to match a population drawn from the
+following distribution function
+\begin{equation}
+  f(z,\vz) \propto e^{-E/\sigma_t^2}\,,
+\end{equation}
+where $E = \omega^2\,z^2 / 2 + \vz^2/2$ is the energy and $\sigma_t =
+0.1$ is the true velocity dispersion. This distribution function is
+isothermal, it has the same velocity dispersion at all heights.
+
+To fit this distribution function using M2M, we start with
+$(\zi,\vzi)$ drawn with uniform weights \wi\ from a similar isothermal
+distribution function, but with a larger $\sigma$: $f(z,\vz) \propto
+e^{-E/\sigma_{\mathrm{in}}^2}$, with $\sigma_{\mathrm{in}}$ typically
+$0.2$. It is then easy to see that the correct output weights should
+be
+\begin{equation}
+  \zi = \exp\left( -\Ei\left[1/\sigma_t^2-1/\sigma_{\mathrm{in}}^2\right]\right)\,.
+\end{equation}
+
+Orbit integration in the harmonic-oscillator potential is analytic and
+we simply have that
+\begin{align}\label{eq:zit}
+  \zi(t) & = \phantom{-}\Ai\phantom{\,\omega}\,\cos\left(\omega\,t+\phii\right)\,,\\
+  \vzi(t) & = -\Ai\,\omega\,\sin\left(\omega\,t+\phii\right)\,,\label{eq:vzit}
+\end{align}
+where
+\begin{align}\label{eq:Ai}
+  A_i  & = \frac{\sqrt{2\,E_i}}{\omega} = \sqrt{z_i^2(0)+\vzi^2(0)/\omega^2}\,,\\
+  \phii & = \arctan\!2(-\vzi(0)/\omega,\zi(0))\,,\label{eq:phii}
+\end{align}
+in which $(\zi(0),\vzi(0))$ is the initial phase-space position and
+$\arctan\!2$ is the arc-tangent function that chooses the quadrant
+correctly. Sampling initial $(\zi(0),\vzi(0))$ from $f(z,\vz) \propto
+e^{-E/\sigma^2}$ is simple: sample $\Ei$ from the exponential
+distribution and convert it to $\Ai$; sample $\phii$ uniformly between
+$0$ and $2\pi$.
+
+\section{Standard M2M}
+
+We first describe the standard M2M case. Standard M2M models a
+steady-state distribution function as a set of $N$ particles
+($\zi,\vzi)$ indexed by $i$ orbiting in a fixed potential. Each
+particle has a weight $\wi$ that is adjusted on-the-fly during orbit
+integration to fit a set of constraints, like the density in bins, or
+the velocity dispersion. By only adjusting the weights $\wi$ on
+timescales $\gg$ the orbital timescale, an approximate equilibrium
+distribution is obtained\footnote{Unlike in Schwarzschild modeling,
+  where orbits are integrated for hundreds of dynamical times and the
+  observables are fit using these orbits, this is a more approximate
+  equilibrium. But in some sense it is \emph{exactly} the correct
+  state to fit, because stellar populations are only in a
+  quasi-stationary state for a few orbital periods (on longer
+  timescales they will evolve due to interactions with clouds, spiral
+  arms, satellite galaxies, etc. or due to the evolution of the
+  underlying gravitational potential.}.
+
+In practice, M2M maximizes an objective function $F$ that represents a
+balance between reproducing the constraints and smoothness of the
+distribution function (through a maximum-entropy constraint)
+\begin{equation}
+  F = \mu S - \frac{1}{2}\sum_j \chi^2_j\,
+\end{equation}
+where $S = - \sum_i w_i \ln\left(w_i/\hat{w}_i\right)$ is the entropy
+and $\chi_j^2$ are constraints expressed in a $\chi^2$ type
+manner. Constraints are expressed as a kernel applied to the
+distribution function $f(z,\vz)$:
+\begin{equation}
+  Y_j = \int \dd z\dd \vz \,K_j(z,\vz) f(z,\vz)\,
+\end{equation}
+which for the $N$-body relation is computed as
+\begin{equation}
+  y_j = \sum_i \wi K_j(\zi,\vzi)\,.
+\end{equation}
+
+To illustrate the standard M2M case, we use the density observed at a
+few points, so
+\begin{equation}
+  \rho(\zobs_j) = \frac{1}{N}\sum_i \wi K^\rho(|\zobs_j+\zsun - \zi|;h)\,,
+\end{equation}
+where $K^\rho(r;h)$ is a kernel function that integrates to one ($\int
+\dd r\,K^\rho(r;h) = 1$), we have assumed that $\sum_i \wi = N$, and
+we assume that the observations are done as a function of $\zobs$,
+which is measured with respect to the Sun's position, located at \zsun\
+from the $z=0$ midplane. We form $\chi^2_j$ as
+\begin{equation}
+  \chi_j^2 = [\Delta^\rho_j]^2 = \left( \rho(\zobs_j)/\rho^\mathrm{obs}_j-1\right)^2\,.
+\end{equation}
+
+The M2M \emph{force of change} equation is then given by
+\begin{equation}
+\begin{split}\label{eq:fcw}
+  \frac{\dd \wi}{\dd t} & = \eps \wi\,\frac{\partial F}{\partial \wi}\\
+  & = -\eps \wi \,\left[\mu \left(\ln\left[w_i/\hat{w}_i\right]+1\right)+ \sum_j \Delta^\rho_j\, K^\rho_j(\zi;h)/\rho_j^\mathrm{obs} \right]\,.
+\end{split}
+\end{equation}
+We solve this equation using a simple Euler method with a fixed step
+size, computing the orbital evolution as we go along using
+\equationname s~(\ref{eq:zit}) and (\ref{eq:vzit}). This method for
+optimizing the objective function can be thought of as a sort of
+gradient ascent. In this interpretation, \eps\ is adjusted such that
+substantial changes to the orbital weights only happen on timescales
+$\gg$ the orbital timescale, which pushes the weights to an
+equilibrium distribution.
+
+\citet{Syer96a} propose to lessen the impact of Poisson noise due to
+the finite number of $N$-body particles by smoothing the
+$\Delta^\rho_j$ deviation that appears in \equationname~(\ref{eq:fcw})
+with a smoothed version $\tilde{\Delta}_j$. In the end, this leads one
+to solve for $\tilde{\Delta}_j$ using the differential equation
+\begin{equation}
+  \frac{\dd \tilde{\Delta}_j}{\dd t} = \alpha \left(\Delta_j-\tilde{\Delta}_j\right)\,,
+\end{equation}
+where $\alpha$ is another timescale parameter. Because we only want to
+smooth on shorter timescales than that over which we substantially
+change the weights, we typically need $\alpha > \eps$.
+
+\section{Fitting for the nuisance parameter \protect\zsun}
+
+In the observed density above, we have assumed that we know the Sun's
+distance from the midplane from which the stars are observed. Now
+suppose that we do not know \zsun. Then when we compare the density to
+the observed density $\rho(\zobs)$ as a function of \zobs, we do not
+know how to shift the model \zi\ to \zobs. The standard approach would
+be to run multiple instances of the standard M2M algorithm for
+different values of \zsun\ and to then determine the maximum of
+$F(\zsun)$. This becomes expensive if there are many nuisance
+parameters.
+
+Here we propose to simply update \zsun\ in tandem with the weights. To
+do this, we compute the force of change for \zsun, which in the case
+of fitting the density is
+\begin{equation}
+\frac{\dd \zsun}{\dd t} = -\eps_z\,\sum_j \Delta^\rho_j/\rho^{\mathrm{obs}}_j \sum_i w_i\,\frac{\dd K^\rho(r)}{\dd r}\Bigg|_{|\zobs+\zsun-\zi|}\,\mathrm{sign}(\zobs+\zsun-\zi)\,,
+\end{equation}
+where we have introduced a different $\eps_z$ parameter to control how
+fast $\zsun$ is changed during the maximization. We expect that we
+want $\eps_z < \eps$, because we want to change \zsun\ only on
+timescales that are longer than the timescales over which we adjust
+the weights.
+
+\section{Fitting for the potential parameter $\protect\omega$}
+
+Next, we want to fit for the potential parameter $\omega$ as well. To
+do this, we need to introduce a velocity constraint as well, because
+the potential cannot be constrained using the density alone. For
+simplicity, we choose the velocity constraint to be the density times
+the mean squared velocity
+\begin{equation}
+\begin{split}
+  \rho\times\langle v^2 \rangle (\zobs_j) & = \frac{1}{N}\sum_i \wi K^v(|\zobs_j+\zsun - \zi|,\vzi;h)\\
+  & = \frac{1}{N}\sum_i \wi\,vzi^2\, K^\rho(|\zobs_j+\zsun - \zi|;h)\,,
+\end{split}
+\end{equation}
+where we have set $K^v(z,\vz) = v^2\,K^\rho(z)$. We assume that each
+velocity constraint adds the following to the total $\chi^2$
+\begin{equation}
+\chi^2_{j,v} = [\Delta^v_j]^2 = \left(\frac{\rho\times\langle v^2 \rangle (\zobs_j)}{[\rho\times\langle v^2 \rangle]_j^{\mathrm{obs}}}-1\right)\,.
+\end{equation}
+
+The force of change equation for the weights then gets an additional
+contribution due to the velocity constraint. This additional
+contribution (which gets added to the right-hand side of
+\equationname~[\ref{eq:fcw}]) is
+\begin{equation}\label{eq:fcwv2}
+    -\eps_v \wi \,\sum_j \Delta^v_j\, \vzi^2\,K^\rho_j(|\zobs_j+\zsun - \zi|;h)/[\rho\times\langle v^2 \rangle]_j^{\mathrm{obs}}\,.
+\end{equation}
+Here we have kept the freedom to use a different epsilon parameter
+$\eps_v$ to adjust the weighting between the density and velocity
+constraints.
+
+Similar to the force of change for \zsun, we can also compute the
+force of change for $\omega$. This is given by
+\begin{equation}\label{eq:fcomega}
+\begin{split}
+  \frac{\dd \omega}{\dd t} = & -\eps_\omega\,\sum_j \sum_i \wi \Bigg[\left\{\frac{\Delta^\rho_j}{\rho^{\mathrm{obs}}_j}+\frac{\Delta^v_j}{[\rho\times\langle v^2 \rangle]_j^{\mathrm{obs}}}\,\vzi^2\right\}\,\frac{\dd K^\rho(r)}{\dd r}\Bigg|_{|\zobs+\zsun-\zi|}\,\mathrm{sign}(\zobs-\zsun-\zi)\frac{\partial \zi}{\partial \omega}\,\\
+  & \qquad \qquad \qquad \qquad +2\frac{\Delta^v_j}{\rho^{\mathrm{obs}}_j} \,\vzi\,K^\rho(|\zobs+\zsun-\zi|)\,\frac{\partial \vzi}{\partial \omega}\Bigg]\,.
+\end{split}
+\end{equation}
+The problem is now that the instantaneous phase-space position
+$(\zi,\vzi)$ does not depend on $\omega$.
+
+Nevertheless, we can compute the partial derivatives $\partial \zi /
+\partial \omega$ and $\partial \vzi / \partial \omega$ using
+\equationname s~(\ref{eq:zit}) and (\ref{eq:vzit}). This gives
+\begin{align}
+  \frac{\partial \zi}{\partial \omega} & = \frac{t}{\omega} \vzi\,,\\
+  \frac{\partial \vzi}{\partial \omega} & = -\omega\,t \zi\,.
+\end{align}
+At $t=0$ these derivatives are zero (because the instantaneous
+phase-space position does not depend on the potential), but if we
+integrate for a short time, the phase-space positions computed in
+different potentials would be different, as given by these partial
+derivatives for short times. Thus, we can drop these into
+\equationname~(\ref{eq:fcomega}) and absorb the $t$ parameter in the
+above equation in $\eps_\omega$. We thus change the potential
+parameter $\omega$ on-the-fly as well, again requiring $\eps_\omega$
+to be such that substantial changes to $\omega$ only occur on
+timescales $\gg$ than the timescale over which substantial changes in
+the weights occur. Because we change $\omega$ on the fly, each time
+step, we need to re-compute the $(\Ai,\phii)$ parameters using
+\equationname s~(\ref{eq:Ai}) and (\ref{eq:phii}).
+
+This appears to work quite well! For more complicated potentials,
+these partial derivatives can be computed by solving the differential
+equation for the difference in $z$ and $\vz$ for small potential
+changes.
+
+
+
+\begin{thebibliography}{}
+%\bibitem[Bovy(2015)]{Bovy15a}
+%  Bovy, J. 2015, \apjs, 216, 29
+\bibitem[Syer \& Tremaine(1996)]{Syer96a} Syer, D., \& Tremaine,
+  S.\ 1996, \mnras, 282, 223
+\bibitem[Dehnen(2009)]{Dehnen09a}
+  Dehnen, W.\ 2009, \mnras, 395, 1079
+\end{thebibliography}
+
+\end{document}
+
