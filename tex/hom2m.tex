@@ -103,7 +103,7 @@ e^{-E/\sigma_{\mathrm{in}}^2}$, with $\sigma_{\mathrm{in}}$ typically
 $0.2$. It is then easy to see that the correct output weights should
 be
 \begin{equation}
-  \zi = \exp\left( -\Ei\left[1/\sigma_t^2-1/\sigma_{\mathrm{in}}^2\right]\right)\,.
+  \wi = \exp\left( -\Ei\left[1/\sigma_t^2-1/\sigma_{\mathrm{in}}^2\right]\right)\,.
 \end{equation}
 
 Orbit integration in the harmonic-oscillator potential is analytic and
@@ -172,14 +172,14 @@ we assume that the observations are done as a function of $\zobs$,
 which is measured with respect to the Sun's position, located at \zsun\
 from the $z=0$ midplane. We form $\chi^2_j$ as
 \begin{equation}
-  \chi_j^2 = [\Delta^\rho_j]^2 = \left( \rho(\zobs_j)/\rho^\mathrm{obs}_j-1\right)^2\,.
+  \chi_j^2 = [\Delta^\rho_j/\sigma_{\rho,j}]^2 = \left( \rho(\zobs_j)-\rho^\mathrm{obs}_j\right)^2/\sigma_{\rho,j}^2\,.
 \end{equation}
 
 The M2M \emph{force of change} equation is then given by
 \begin{equation}
 \begin{split}\label{eq:fcw}
   \frac{\dd \wi}{\dd t} & = \eps \wi\,\frac{\partial F}{\partial \wi}\\
-  & = -\eps \wi \,\left[\mu \left(\ln\left[w_i/\hat{w}_i\right]+1\right)+ \sum_j \Delta^\rho_j\, K^\rho_j(\zi;h)/\rho_j^\mathrm{obs} \right]\,.
+  & = -\eps \wi \,\left[\mu \left(\ln\left[w_i/\hat{w}_i\right]+1\right)+ \sum_j \Delta^\rho_j\, K^\rho_j(\zi;h)/\sigma_{\rho,j}^2 \right]\,.
 \end{split}
 \end{equation}
 We solve this equation using a simple Euler method with a fixed step
@@ -219,7 +219,7 @@ Here we propose to simply update \zsun\ in tandem with the weights. To
 do this, we compute the force of change for \zsun, which in the case
 of fitting the density is
 \begin{equation}
-\frac{\dd \zsun}{\dd t} = -\eps_z\,\sum_j \Delta^\rho_j/\rho^{\mathrm{obs}}_j \sum_i w_i\,\frac{\dd K^\rho(r)}{\dd r}\Bigg|_{|\zobs+\zsun-\zi|}\,\mathrm{sign}(\zobs+\zsun-\zi)\,,
+\frac{\dd \zsun}{\dd t} = -\eps_z\,\sum_j \frac{\Delta^\rho_j}{\sigma_{\rho,j}^2} \sum_i w_i\,\frac{\dd K^\rho(r)}{\dd r}\Bigg|_{|\zobs_j+\zsun-\zi|}\,\mathrm{sign}(\zobs_j+\zsun-\zi)\,,
 \end{equation}
 where we have introduced a different $\eps_z$ parameter to control how
 fast $\zsun$ is changed during the maximization. We expect that we
@@ -237,13 +237,13 @@ the mean squared velocity
 \begin{equation}
 \begin{split}
   \rho\times\langle v^2 \rangle (\zobs_j) & = \frac{1}{N}\sum_i \wi K^v(|\zobs_j+\zsun - \zi|,\vzi;h)\\
-  & = \frac{1}{N}\sum_i \wi\,vzi^2\, K^\rho(|\zobs_j+\zsun - \zi|;h)\,,
+  & = \frac{1}{N}\sum_i \wi\,\vzi^2\, K^\rho(|\zobs_j+\zsun - \zi|;h)\,,
 \end{split}
 \end{equation}
-where we have set $K^v(z,\vz) = v^2\,K^\rho(z)$. We assume that each
+where we have set $K^v(z,\vz) = \vz^2\,K^\rho(z)$. We assume that each
 velocity constraint adds the following to the total $\chi^2$
 \begin{equation}
-\chi^2_{j,v} = [\Delta^v_j]^2 = \left(\frac{\rho\times\langle v^2 \rangle (\zobs_j)}{[\rho\times\langle v^2 \rangle]_j^{\mathrm{obs}}}-1\right)\,.
+\chi^2_{j,v} = [\Delta^v_j/\sigma_{\rho v^2,j}^2]^2 = \left(\rho\times\langle v^2 \rangle (\zobs_j)-[\rho\times\langle v^2 \rangle]_j^{\mathrm{obs}}\right)^2/\sigma_{\rho v^2,j}^2\,.
 \end{equation}
 
 The force of change equation for the weights then gets an additional
@@ -251,50 +251,61 @@ contribution due to the velocity constraint. This additional
 contribution (which gets added to the right-hand side of
 \equationname~[\ref{eq:fcw}]) is
 \begin{equation}\label{eq:fcwv2}
-    -\eps_v \wi \,\sum_j \Delta^v_j\, \vzi^2\,K^\rho_j(|\zobs_j+\zsun - \zi|;h)/[\rho\times\langle v^2 \rangle]_j^{\mathrm{obs}}\,.
+    -\eps_v \wi \,\sum_j \frac{\Delta^v_j}{\sigma_{\rho v^2,j}^2}\, \vzi^2\,K^\rho_j(|\zobs_j+\zsun - \zi|;h)\,.
 \end{equation}
 Here we have kept the freedom to use a different epsilon parameter
 $\eps_v$ to adjust the weighting between the density and velocity
 constraints.
 
-Similar to the force of change for \zsun, we can also compute the
-force of change for $\omega$. This is given by
+To compute the force of change for $\omega$ we need to compute the
+derivative of the objective function with respect to
+$\omega$. However, the objective function does not depend on $\omega$,
+because it is only a function of the instantaneous phase-space
+position and this does not depend on the potential. Therefore, the
+derivative of the objective function with respect to $\omega$ is
+zero. Specifically,
 \begin{equation}\label{eq:fcomega}
 \begin{split}
-  \frac{\dd \omega}{\dd t} = & -\eps_\omega\,\sum_j \sum_i \wi \Bigg[\left\{\frac{\Delta^\rho_j}{\rho^{\mathrm{obs}}_j}+\frac{\Delta^v_j}{[\rho\times\langle v^2 \rangle]_j^{\mathrm{obs}}}\,\vzi^2\right\}\,\frac{\dd K^\rho(r)}{\dd r}\Bigg|_{|\zobs+\zsun-\zi|}\,\mathrm{sign}(\zobs-\zsun-\zi)\frac{\partial \zi}{\partial \omega}\,\\
-  & \qquad \qquad \qquad \qquad +2\frac{\Delta^v_j}{[\rho\times\langle v^2 \rangle]_j^{\mathrm{obs}}} \,\vzi\,K^\rho(|\zobs+\zsun-\zi|)\,\frac{\partial \vzi}{\partial \omega}\Bigg]\,.
+  \frac{\partial F}{\partial \omega} = & \,\sum_j \sum_i \wi \Bigg[\left\{\frac{\Delta^\rho_j}{\sigma_{\rho,j}^2}+\frac{\Delta^v_j}{\sigma_{\rho v^2,j}^2}\,\vzi^2\right\}\,\frac{\dd K^\rho(r)}{\dd r}\Bigg|_{|\zobs_j+\zsun-\zi|}\,\mathrm{sign}(\zobs_j+\zsun-\zi)\frac{\partial \zi}{\partial \omega}\,\\
+  & \qquad \qquad \qquad \qquad -2\frac{\Delta^v_j}{\sigma_{\rho v^2,j}^2} \,\vzi\,K^\rho(|\zobs_j+\zsun-\zi|)\,\frac{\partial \vzi}{\partial \omega}\Bigg]\,.
 \end{split}
 \end{equation}
-The problem is now that the instantaneous phase-space position
-$(\zi,\vzi)$ does not depend on $\omega$.
-
-Nevertheless, we can compute the partial derivatives $\partial \zi /
-\partial \omega$ and $\partial \vzi / \partial \omega$ using
-\equationname s~(\ref{eq:zit}) and (\ref{eq:vzit}). This gives
+The problem with this expression is that the instantaneous phase-space
+position $(\zi,\vzi)$ does not depend on $\omega$, such that the
+derivatives $\partial \zi / \partial \omega$ and $\partial \vzi /
+\partial \omega$ are zero. Formally, the partial derivatives $\partial
+\zi / \partial \omega$ and $\partial \vzi / \partial \omega$ from
+\equationname s~(\ref{eq:zit}) and (\ref{eq:vzit}) are
 \begin{align}
   \frac{\partial \zi}{\partial \omega} & = \frac{t}{\omega} \vzi\,,\\
   \frac{\partial \vzi}{\partial \omega} & = -\omega\,t \zi\,.
 \end{align}
-At $t=0$ these derivatives are zero (because the instantaneous
-phase-space position does not depend on the potential), but if we
-integrate for a short time, the phase-space positions computed in
-different potentials would be different, as given by these partial
-derivatives for short times. Thus, we can drop these into
-\equationname~(\ref{eq:fcomega}) and absorb the $t$ parameter in the
-above equation in $\eps_\omega$. We thus change the potential
-parameter $\omega$ on-the-fly as well, again requiring $\eps_\omega$
-to be such that substantial changes to $\omega$ only occur on
-timescales $\gg$ than the timescale over which substantial changes in
-the weights occur. Because we change $\omega$ on the fly, each time
+At $t=0$ these derivatives are zero, but the problem is even worse
+than that. If the weights are already chosen such that the $N$-body
+population is in equilibrium, the expectation value of these partial
+derivatives even at non-zero $t$ is zero (because $\langle z \rangle =
+0$ and $\langle \vz \rangle = 0$).
+
+The previous discussion implies that we can only see changes to the
+objective function due to different $\omega$ on time-scales $\Delta t$
+on which the above expressions break down. That is, on timescales on
+which the difference in orbits between $\omega$ and $\omega+\Delta
+\omega$ is non-linear. Technically, this requirement is that $\Delta t
+\Delta \omega \gtrsim 1$. On such timescales, $\Delta \zi$ becomes
+large, such that we can no longer use the chain rule as in
+\equationname~(\ref{eq:fcomega}), but we can directly evaluate the
+derivative $\partial F/\partial \omega$ by tracking $\zi(\omega+\Delta
+\omega)$ and $\vzi(\omega+\Delta \omega)$. The force of change equation
+then becomes simply
+\begin{equation}\label{eq:fcomegaalt}
+\frac{\dd \omega}{\dd t} = \eps_\omega \, \frac{\partial F}{\partial \omega}\,.
+\end{equation}
+We use a time-step for this equation that is greater by a factor than
+that for integrating the weights and compute the derivative with a
+step $\Delta \omega$ such that $\Delta t \Delta \omega =
+\mathcal{O}(1)$. Because we change $\omega$ on the fly, each time
 step, we need to re-compute the $(\Ai,\phii)$ parameters using
 \equationname s~(\ref{eq:Ai}) and (\ref{eq:phii}).
-
-This appears to work quite well! For more complicated potentials,
-these partial derivatives can be computed by solving the differential
-equation for the difference in $z$ and $\vz$ for small potential
-changes.
-
-
 
 \begin{thebibliography}{}
 %\bibitem[Bovy(2015)]{Bovy15a}
