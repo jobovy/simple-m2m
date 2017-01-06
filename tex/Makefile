@@ -1,4 +1,4 @@
-all: hom2m.pdf
+all: hom2m.pdf density.pdf
 
 %.pdf: %.tex
 	pdflatex $<

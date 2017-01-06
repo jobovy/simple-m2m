@@ -1,0 +1,249 @@
+\documentclass[12pt,preprint]{aastex}
+\usepackage{amssymb,amsmath}
+%\usepackage{color,hyperref}
+% hypertex insanity
+%\definecolor{linkcolor}{rgb}{0,0,0.25}
+%\hypersetup{
+%  colorlinks=true,        % false: boxed links; true: colored links
+%  linkcolor=linkcolor,    % color of internal links
+%  citecolor=linkcolor,    % color of links to bibliography
+%  filecolor=linkcolor,    % color of file links
+%  urlcolor=linkcolor      % color of external links
+%}
+\newcounter{address}
+\setcounter{address}{1}
+%\usepackage{sidecap}
+\setlength{\emergencystretch}{2em}%No overflowing references
+\newcommand{\ie}{i.e.}
+\newcommand{\etal}{et al.}
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\eg}{e.g.}
+\newcommand{\eqnname}{equation}
+\newcommand{\equationname}{\eqnname}
+\newcommand{\figurenames}{\figurename s}
+
+\newcommand{\dens}{\ensuremath{\nu_*}}
+\newcommand{\zsun}{\ensuremath{z_\odot}}
+\newcommand{\gaia}{\emph{Gaia}}
+\newcommand{\tgas}{\emph{TGAS}}
+\newcommand{\ra}{\ensuremath{\alpha}}
+\newcommand{\dec}{\ensuremath{\delta}}
+\newcommand{\plx}{\ensuremath{\varpi}}
+\usepackage{yfonts}
+\newcommand{\essf}{\ensuremath{\textswab{S}}}
+
+\newcommand{\pc}{\ensuremath{\,\mathrm{pc}}}
+
+\begin{document}
+
+\title{Determining stellar density laws with \tgas}
+\author{Jo~Bovy\altaffilmark{1,2,3}}
+\altaffiltext{\theaddress}{\label{1}\stepcounter{address}
+  Department of Astronomy and Astrophysics, University of Toronto, 50
+  St.  George Street, Toronto, ON, M5S 3H4, Canada;
+  bovy@astro.utoronto.ca~}
+\altaffiltext{\theaddress}{\label{2}\stepcounter{address} 
+  Center for Computational Astrophysics, Flatiron Institute, 162 5th Ave, New York, NY 10010, USA}
+\altaffiltext{\theaddress}{\label{3}\stepcounter{address}
+  Alfred~P.~Sloan~Fellow}
+
+\begin{abstract} 
+  This note discusses how to observationally determine stellar density
+  laws from the \tgas\ data, taking into account the \tgas\ selection
+  function.
+\end{abstract}
+
+\section{Introduction}
+
+The general problem under consideration here is how to determine
+stellar density laws $\dens(X,Y,Z)$ of stellar populations in the
+Milky Way from \tgas\ observations of stars providing precise
+$(\ra,\dec,\plx,G)$. These notes follow the discussion in
+\citet{Bovy16a}, which the reader should familiarize themselves with,
+although the discussion below is largely self-contained.
+
+\section{Likelihood-based density modeling}
+
+We are interested in $\dens(X,Y,Z)$, where $(X,Y,Z)$ is a set of
+cartesian coordinates related by a rotation to the spherical
+coordinates ($\ra,\dec,D=1/\plx$) in which observations are
+made\footnote{We write distance $D=1/\plx$ as a shorthand here; if
+  $\sigma_\plx$ is large, care and prior information must be used to
+  infer $D$ from $\plx$.}. Following \citet{Bovy16a}, we determine
+$\dens(X,Y,Z)$ from a population of stars that is not complete in any
+(simple) geometric sense and thus need to take the selection function
+into account. We assume that the selection function is a function of
+(a) position on the sky (\ra,\dec), (b) an apparent magnitude (here
+\gaia\ $G$), and potentially (c) a color $c$. We further assume that
+the absolute magnitude $M_G$ of stars in the population under
+investigation can be (closely enough) determined from $G$ and $c$,
+such that we can connect the underlying stellar density in $(X,Y,Z)$
+to the distribution in apparent magnitude.
+
+To determine $\dens(X,Y,Z)$ we use a likelihood approach that models
+the full rate function $\lambda(O|\theta)$ that gives the number of
+stars as a function of all observables $O$ of interest for a set of
+model parameters $\theta$. These observables $O$ are in this case
+$(\ra,\dec,D,G,c)$---we will use $(X,Y,Z)$ and $(\ra,\dec,D)$
+interchangeably because they are related by coordinate transformation,
+but will keep track of the Jacobian---and we can write
+\begin{equation}
+\begin{split}
+  \lambda(O|\theta) & = \lambda(\ra,\dec,D,G,c)\,,\\
+  &  = \dens(X,Y,Z|\theta)\,D^2\,\cos \dec\,\rho(M_G,c|X,Y,Z)\,S(\ra,\dec,G,c)\,,
+\end{split}
+\end{equation}
+where we have assumed that the model parameters only affect
+$\dens$. In this decomposition, the factor $D^2\,\cos \dec$ comes from
+the Jacobian of the transformation between $(\ra,\dec,D)$ and
+$(X,Y,Z)$, $S(\ra,\dec,G,c)$ is the \tgas\ selection function, and
+$\rho(M_G,c|X,Y,Z)$ gives the density distribution of $(M_G,c)$, which
+may be a function of position ($X,Y,Z$), of the stellar population. 
+
+An observed set of stars indexed by $i$ forms a Poisson process with
+the likelihood $\mathcal{L}(\theta)$ of the parameters $\theta$
+describing the density law given by
+\begin{equation}
+\begin{split}
+  \ln \mathcal{L}(\theta) & = \sum_i \ln \lambda(O_i|\theta) -\int \dd O
+  \lambda(O|\theta)\,,\\ & = \sum_i \ln \dens(X_i,Y_i,Z_i|\theta)\\
+  & \quad -\int \dd D\, D^2\dd \ra \dd \dec
+    \,\cos\dec\,\dens(X,Y,Z|\theta)\int \dd G \dd c
+      \,\rho(M_G,c|X,Y,Z)\,S(\ra,\dec,G,c)\,,\\
+\end{split}
+\end{equation}
+where in the second line we have dropped terms that do not depend on
+$\theta$.  As in \citet{Bovy16a} we simplify this expression by
+defining the \emph{effective selection function} $\essf(\ra,\dec,D)$
+defined by
+\begin{equation}
+  \essf(\ra,\dec,D) \equiv \int \dd G \dd c \,\rho(M_G,c|X,Y,Z)\,S(\ra,\dec,G,c)\,,
+\end{equation}
+where we use that $5\log_{10}\left(D/10\pc\right) =
+G-M_G$\footnote{This assumes that there is no extinction due to
+  dust. If there is extinction $A_G(\ra,\dec,D)$, this should be taken
+  into account in this equation.}. The ln likelihood then becomes
+\begin{equation}
+  \ln \mathcal{L}(\theta) = \sum_i \ln \dens(X_i,Y_i,Z_i|\theta)
+  -\int \dd D\, D^2\dd \ra \dd \dec
+    \,\cos\dec\,\dens(X,Y,Z|\theta)\,\essf(\ra,\dec,D)\,.\\
+\end{equation}
+Unlike the selection function $S(\cdot)$ which is a function of the
+survey's operations only (which parts of the sky were observed, for
+how long, \ldots), the effective selection function $\essf(\cdot)$ is
+a function of both the survey operations \emph{and} the stellar
+population under investigation. Its usefulness derives from the fact
+that it encapsulates all observational effects due to selection and
+dust obscuration and turns the inference problem into a purely
+geometric problem.
+
+To determine the best-fit parameters $\hat{\theta}$ of a parameterized
+density law $\dens(X,Y,Z|\theta)$ one has to optimize the ln likelihood
+given above. This ln likelihood can be marginalized analytically over
+the overall amplitude of the density (the local normalization if you
+will); this is discussed in \citet{Bovy16a} and similar expressions
+would apply here.
+
+\section{Non-parametric binned density laws}
+
+Now suppose that one wants to determine the density $\dens(X,Y,Z)$ of
+a stellar population in a set of bins in $(X,Y,Z)$. The bins are given
+by a set $\{\Pi_k\}_k$ of rectangular functions that are equal to one
+within the domain of the bin and zero outside of it. The domain can
+have an arbitrary shape, but typically this would be an interval in
+each of $X$, $Y$, and $Z$ or perhaps in $R$ and $Z$, where $R$ is the
+Galactocentric radius. We can then write the density as
+\begin{equation}
+  \dens(X,Y,Z|\theta) = \sum_k n_k\,\Pi_k(X,Y,Z)\,,
+\end{equation}
+where $\theta\equiv\{n_k\}_k$ is a set of numbers that give the
+density in each bin and that therefore parameterizes the density law.
+
+The ln likelihood then becomes
+\begin{equation}
+\begin{split}
+  \ln \mathcal{L}(\{n_k\}_k) & = \sum_i \ln \sum_k n_k\,\Pi_k(X_i,Y_i,Z_i)
+  -\int \dd D\, D^2\dd \ra \dd \dec
+    \,\cos\dec\,\sum_k n_k\,\Pi_k(X,Y,Z)\,\essf(\ra,\dec,D)\,,\\
+    & = \sum_k \left[ N_k \ln n_k - n_k \int \dd D\, D^2\dd \ra \dd \dec
+    \,\cos\dec\,\Pi_k(X,Y,Z)\,\essf(\ra,\dec,D)\right]\,,\\
+\end{split}
+\end{equation}
+where $N_k$ is the number of points $i$ in the observed set that fall
+within bin $k$. We can maximize this likelihood for each $n_k$
+analytically and find best-fit $\hat{n}_k$
+\begin{equation}
+  \hat{n}_k = \frac{N_k}{\int \dd D\, D^2\dd \ra \dd \dec
+    \,\cos\dec\,\Pi_k(X,Y,Z)\,\essf(\ra,\dec,D)}\,.
+\end{equation}
+The denominator in this expression is known as the \emph{effective
+  volume}. Using the same symbol $\Pi_k$ to denote the integration
+volume and using $x = (X,Y,Z)$ and $(\ra,\dec,D)$ interchangeably because
+they are related through coordinate transformation (as we've been
+doing all along), this can be written as the following simple
+expression
+\begin{equation}
+  \hat{n}_k = \frac{N_k}{\int_{\Pi_k} \dd^3 x\,\essf(\ra,\dec,D)}\,.
+\end{equation}
+Thus, the effective volume is the spatial integral of the effective
+selection function. This expression makes sense, because for a
+complete sample $\essf(\ra,\dec,D) = 1$ and this expression simplifies
+to the number divided by the volume of the bin, the standard way to
+compute a number density.
+
+From the second derivative of the ln likelihood, we find the
+uncertainty on the $\hat{n}_k$
+\begin{equation}
+  \sigma_{\hat{n}_k} = \frac{\hat{n}_k}{\sqrt{N_k}}\,,
+\end{equation}
+which again makes sense.
+
+\section{Application to \tgas}
+
+To apply this formalism to the \tgas\ data, one requires the following
+\begin{itemize}
+  \item $S(\ra,\dec,G,c)$: This can be obtained by comparing the
+    \tgas\ catalog to the 2MASS catalog. In principle this is best
+    done in a pixelized representation of the sky ($\ra,\dec$), \eg,
+    through use of HEALPIx. The best form of the dependence on $G$ may
+    be a smooth function or a binned representation. Whether the
+    selection function has any significant dependence on a color $c$
+    for samples of interest is unknown to me.
+
+    If a cut on parallax uncertainty is made, then the selection
+    function needs to be determined by comparing the sample resulting
+    from the cut with the underlying 2MASS sample. Because parallax
+    uncertainty depends on $c$, this will almost certainly introduce a
+    dependence on $c$, although this may be minimized by restricting
+    the color range. To allow for different parallax-uncertainty cuts
+    (and other \tgas\ cuts), we would therefore ideally be able to
+    determine the selection function on the fly. However, the
+    denominator (the 2MASS number counts) could be cached on a fine
+    HEALPIx grid (HEALPIx is best, because TGAS has a HEALPIx index
+    that can then be used to quickly determine the selection
+    function).
+  \item $\essf(\ra,\dec,D)$: The calculation of $\essf(\ra,\dec,D)$
+    requires the density $\rho(M_G,c|X,Y,Z)$ [in addition to
+      $S(\ra,\dec,G,c)$]. This can be obtained most easily from a
+    Monte Carlo sampling of the \tgas\ sample of interest. The
+    \tgas\ sample provides a sample $(M_{G,j},c_j)$ and the integral
+    over $\rho(M_G,c)$ in the effective selection function can thus be
+    performed through Monte Carlo integration using this sample:
+    \begin{equation}
+      \essf(\ra,\dec,D) \approx \sum_j S(\ra,\dec,5\log_{10}\left(D/10\pc\right)+M_{G,j},c_j)\,.
+    \end{equation}
+    The sample $(M_{G,j},c_j)$ can be restricted to a certain spatial
+    region (\eg, $\Pi_k$) if there is any concern that the density
+    $\rho(M_G,c|X,Y,Z)$ depends significantly on $(X,Y,Z)$, but this
+    is unlikely.
+\end{itemize}
+
+\begin{thebibliography}{}
+%\bibitem[Bovy(2015)]{Bovy15a}
+%  Bovy, J. 2015, \apjs, 216, 29
+\bibitem[Bovy \etal(2016)]{Bovy16a} Bovy, J., Rix, H.-W., Green,
+  G.~M., Schlafly, E.~F., \& Finkbeiner, D.~P.\ 2016, \apj, 818, 130
+\end{thebibliography}
+
+\end{document}
+
