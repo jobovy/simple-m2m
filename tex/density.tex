@@ -222,6 +222,17 @@ To apply this formalism to the \tgas\ data, one requires the following
     HEALPix grid (HEALPix is best, because TGAS has a HEALPix index
     that can then be used to quickly determine the selection
     function).
+
+    A complication in practice is that the \gaia\ catalog itself is
+    not complete (otherwise we could just use it!), so not all 2MASS
+    sources will have a $G$ magnitude. There are various options to
+    deal with this: (a) use $J$ instead of $G$, (b) determine a
+    transformation $(J,H,K) \rightarrow G$ and assign $G$ based on
+    this to 2MASS sources missing a $G$ measurement.
+
+    Another option may be to use the Tycho-2 catalog as the underlying
+    catalog instead of 2MASS. Tycho-2 is 99\,\% complete down to
+    $V=11$, so could function instead of 2MASS down to that limit.
   \item $\essf(\ra,\dec,D)$: The calculation of $\essf(\ra,\dec,D)$
     requires the density $\rho(M_G,c|X,Y,Z)$ [in addition to
       $S(\ra,\dec,G,c)$]. This can be obtained most easily from a
