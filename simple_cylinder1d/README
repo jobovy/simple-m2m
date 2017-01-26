@@ -1,0 +1,28 @@
+
+
+### run hom2m using the output of simple 1D selection. 
+
+hom2m_simple1d.py
+
+
+### simple R=0.1 kpc cylinder 1D density for F star
+ calculate density at different z, and output the stellar position within the cylinder.
+
+dens1d_fstar.py
+
+F star colour range from 
+Table 5 from http://adsabs.harvard.edu/abs/2013ApJS..208....9P 
+http://www.pas.rochester.edu/~emamajek/EEM_dwarf_UBVIJHK_colors_Teff.txt
+
+F9 ... Mv=4.15
+G9 ... Mv=5.55
+
+Mv=V-5.0*log10 d(pc) +5.0
+Mv=VTmag-5.0*log10(1000.0/Plx)+5.0
+* V=11, and Mv=4.15
+ dlim = 234.4 pc
+ dz within the cylinder of 0.1 kpc radius zlim= 207 pc
+
+
+
+
