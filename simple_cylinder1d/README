@@ -21,7 +21,7 @@ Mv=V-5.0*log10 d(pc) +5.0
 Mv=VTmag-5.0*log10(1000.0/Plx)+5.0
 * V=11, and Mv=4.15
  dlim = 234.4 pc
- dz within the cylinder of 0.1 kpc radius zlim= 207 pc
+ dz within the cylinder of 0.1 or 0.2 kpc radius zlim= 207 pc
 
 
 
