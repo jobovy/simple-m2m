@@ -286,8 +286,6 @@ tbhdu.writeto('selstars_xyzvz.fits',clobber=True)
 nsz_n=np.histogram(zpos_cs,nbin_n,(zmin_n,zmax_n))[0]
 nsz_s=np.histogram(zpos_cs,nbin_s,(zmin_s,zmax_s))[0]
 
-print ' number of stars in bin in North=',nsz_n
-print ' number of stars in bin in South=',nsz_s
 
 # vzm and vz2m
 vzmhist_n=np.histogram(zpos_cs,nbin_n,(zmin_n,zmax_n),weights=velz_cs)[0]/nsz_n
@@ -298,8 +296,14 @@ vz2mhist_s=np.histogram(zpos_cs,nbin_s,(zmin_s,zmax_s),weights=(velz_cs**2))[0]/
 sigvz_n=np.sqrt(vz2mhist_n-vzmhist_n**2)
 sigvz_s=np.sqrt(vz2mhist_s-vzmhist_s**2)
 
+print ' z bins North=',zbin_n
 print ' vz dispersion North=',sigvz_n
+print ' vz meain North=',vzmhist_n
+print ' number of stars in bin in North=',nsz_n
+print ' z bins South=',zbin_s
 print ' vz dispersion South=',sigvz_s
+print ' vz meain South=',vzmhist_s
+print ' number of stars in bin in South=',nsz_s
 
 # show histogram
 plt.scatter(zpos_cs,velz_cs,marker='.')

@@ -27,7 +27,7 @@ numpy.random.seed(4)
 # z_obs= numpy.array([0.075,0.1,0.125,0.15,0.175,0.2,-0.075,-0.1,-0.125,-0.15,-0.175,-0.2])
 z_obs= numpy.array([0.075,0.1,0.125,0.15,0.175,-0.075,-0.1,-0.125,-0.15,-0.175])
 h_obs= 0.05
-h_m2m= 0.05
+h_m2m= h_obs
 
 # print input parameters
 
@@ -50,17 +50,10 @@ print 'number of selected stars=',n_mock
 # plt.show()
 #plt.savefig('dens_hist.jpg')
 
-def compute_dens(z,zsun,z_obs,w=None):
-    if w is None: w= numpy.ones_like(z)
-    dens= numpy.zeros_like(z_obs)
-    for jj,zo in enumerate(z_obs):
-        dens[jj]= numpy.sum(w*kernel(numpy.fabs(zo-z+zsun),h_obs))/len(z)
-    return dens
-
 # for observed density
 # the input data has "unknown" zoffset so no need for z offset
 zoff_obs=0.0
-dens_obs= compute_dens(z_mock,zoff_obs,z_obs)
+dens_obs= compute_dens(z_mock,zoff_obs,z_obs,h_obs)
 dens_obs_noise= numpy.sqrt(dens_obs)*0.2*numpy.sqrt(numpy.amax(dens_obs))\
     /(numpy.fabs(z_obs**2)/numpy.amin(numpy.fabs(z_obs**2)))
 # observation already has a noise
@@ -92,7 +85,7 @@ z_m2m= A_m2m*numpy.cos(phi_m2m)
 z_out= numpy.linspace(-0.3,0.3,101)
 # use zsun guess
 zsun_guess=0.025
-dens_init= compute_dens(z_m2m,zsun_guess,z_out,w_init)
+dens_init= compute_dens(z_m2m,zsun_guess,z_out,h_m2m,w_init)
 bovy_plot.bovy_print(axes_labelsize=17.,text_fontsize=12.,xtick_labelsize=15.,ytick_labelsize=15.)
 # figsize(6,4)
 bovy_plot.bovy_plot(z_out,dens_init,'-',semilogy=True,
@@ -122,7 +115,7 @@ z_m2m= A_m2m*numpy.cos(phi_m2m+nstep*step*omega_m2m)
 vz_m2m= -A_m2m*omega_m2m*numpy.sin(phi_m2m+nstep*step*omega_m2m)
 z_out= numpy.linspace(-0.3,0.3,101)
 # use zsun_guess
-dens_final= compute_dens(z_m2m,zsun_guess,z_out,w_out)
+dens_final= compute_dens(z_m2m,zsun_guess,z_out,h_m2m,w_out)
 bovy_plot.bovy_print(axes_labelsize=17.,text_fontsize=12.,xtick_labelsize=15.,ytick_labelsize=15.)
 # figsize(15,6)
 plt.subplot(2,3,1)
@@ -182,7 +175,7 @@ print("Zsun: fit, starting point",zsun_out[-1],zsun_m2m)
 z_m2m= A_m2m*numpy.cos(phi_m2m+nstep*step*omega_m2m)
 vz_m2m= -A_m2m*omega_m2m*numpy.sin(phi_m2m+nstep*step*omega_m2m)
 z_out= numpy.linspace(-0.3,0.3,101)
-dens_final= compute_dens(z_m2m,zsun_out[-1],z_out,w_out)
+dens_final= compute_dens(z_m2m,zsun_out[-1],z_out,h_m2m,w_out)
 bovy_plot.bovy_print(axes_labelsize=17.,text_fontsize=12.,xtick_labelsize=15.,ytick_labelsize=15.)
 # figsize(15,6)
 plt.subplot(2,3,1)
