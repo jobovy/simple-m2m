@@ -2,7 +2,11 @@
 
 ### run hom2m using the output of simple 1D selection. 
 
+hom2m-densv2m.py
+ use both density and velocity information
+
 hom2m_simple1d.py
+ only use density information 
 
 ### simple R=0.1 or 0.2 kpc cylinder 1D density for F star
  calculate density at different z, and output the stellar position within the cylinder.

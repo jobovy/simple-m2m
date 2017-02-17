@@ -298,11 +298,11 @@ sigvz_s=np.sqrt(vz2mhist_s-vzmhist_s**2)
 
 print ' z bins North=',zbin_n
 print ' vz dispersion North=',sigvz_n
-print ' vz meain North=',vzmhist_n
+print ' vz mean North=',vzmhist_n
 print ' number of stars in bin in North=',nsz_n
 print ' z bins South=',zbin_s
 print ' vz dispersion South=',sigvz_s
-print ' vz meain South=',vzmhist_s
+print ' vz mean South=',vzmhist_s
 print ' number of stars in bin in South=',nsz_s
 
 # show histogram
