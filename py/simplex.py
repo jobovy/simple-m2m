@@ -25,7 +25,7 @@ def simplex_to_Rn(x):
     return _logit(z)-_logit(numpy.arange(1,len(z)+1)[::-1]/\
                              numpy.arange(2,len(z)+2).astype('float')[::-1])
 
-def Rn_to_simplex(y):
+def Rn_to_simplex(y,_retz=False):
     """
     NAME:
        Rn_to_simplex
@@ -47,4 +47,36 @@ def Rn_to_simplex(y):
     tmp2= numpy.roll(1.-tmp1,-1)
     tmp1[0]= 1.
     x= numpy.cumprod(tmp1)*tmp2
-    return x
+    if _retz:
+        return (x,z)
+    else:
+        return x
+
+def Rn_to_simplex_jac(y,det=False,dlogdet=False):
+    """
+    NAME:
+       Rn_to_simplex_jac
+    PURPOSE:
+       Compute the Jacobian of the transformation R^n --> simplex
+    INPUT:
+       y \in R^n
+       det= (False) if True, also return the determinant of the Jacobian
+       dlogdet= (False) if True, also return the derivative of the ln of the determinant
+    OUTPUT:
+       (Jacobian,determinant, d ln determinant/ d y)
+    HISTORY:
+       2017-02-21 - Written - Bovy (UofT/CCA)
+    """
+    w, x= Rn_to_simplex(y,_retz=True)
+    out= numpy.zeros((len(y)+1,len(y)))
+    indx= numpy.tril_indices(len(y)+1,k=0,m=len(y))
+    out[indx[0],indx[1]]= w[indx[0]]*(1.-x[indx[1]])
+    indx= numpy.diag_indices(len(y))
+    out[indx[0],indx[1]]= -w[indx[0]]*x[indx[1]]
+    out= (out,)
+    if det:
+        out= out+(numpy.prod(w[:-1]*x),)
+    if dlogdet:
+        out= out+((len(x)-numpy.arange(len(x)))*(1.-x)-x,)
+    if len(out) == 1: return out[0]
+    else: return out
