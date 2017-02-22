@@ -80,3 +80,19 @@ def Rn_to_simplex_jac(y,det=False,dlogdet=False):
         out= out+((len(x)-numpy.arange(len(x)))*(1.-x)-x,)
     if len(out) == 1: return out[0]
     else: return out
+
+def simplex_to_Rn_derivs(dx,jac):
+    """
+    NAME:
+       simplex_to_Rn_derivs
+    PURPOSE:
+       transform derivatives wrt the simplex (d / d x) to derivatives with respect to the R^N-1 variables
+    INPUT:
+       dx - derivatives
+       jac - pre-computed jacobian
+    OUTPUT:
+       derivatives wrt y
+    HISTORY:
+       2017-02-22 - Written - Bovy (UofT/CCA)
+    """
+    return numpy.dot(jac,dx)
