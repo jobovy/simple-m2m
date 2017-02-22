@@ -1,9 +1,23 @@
-
-import math
+# hom2m.py: Simple Harmonic-Oscillator M2M implementation
 import numpy
 import copy
 
-# define kernel
+######################### COORDINATE TRANSFORMATIONS ##########################
+def zvz_to_Aphi(z,vz,omega):
+    A= numpy.sqrt(z**2.+vz**2./omega**2.)
+    phi= numpy.arctan2(-vz/omega,z)
+    return (A,phi)
+def Aphi_to_zvz(A,phi,omega):
+    z= A*numpy.cos(phi)
+    vz= -A*omega*numpy.sin(phi)
+    return (z,vz)
+############################# ISOTHERMAL DF TOOLS #############################
+def sample_iso(sigma,omega,n=1):
+    E= numpy.random.exponential(scale=sigma**2.,size=n)
+    phi= numpy.random.uniform(size=n)*2.*numpy.pi
+    A= numpy.sqrt(2.*E)/omega
+    return Aphi_to_zvz(A,phi,omega)
+################################### KERNELS ###################################
 def sph_kernel(r,h):
     out= numpy.zeros_like(r)
     out[(r >= 0.)*(r <= h/2.)]= 1.-6.*(r[(r >= 0.)*(r <= h/2.)]/h)**2.+6.*(r[(r >= 0.)*(r <= h/2.)]/h)**3.
@@ -24,58 +38,81 @@ def epanechnikov_kernel_deriv(r,h):
     out= numpy.zeros_like(r)
     out[(r >= 0.)*(r <= h)]= -3./2.*r[(r >= 0.)*(r <= h)]/h**3.
     return out
-if True:
-    kernel= epanechnikov_kernel
-    kernel_deriv= epanechnikov_kernel_deriv
-else:
-    kernel= sph_kernel
-    kernel_deriv= sph_kernel_deriv
+#if True:
+#    kernel= epanechnikov_kernel
+#    kernel_deriv= epanechnikov_kernel_deriv
+#else:
+#    kernel= sph_kernel
+#    kernel_deriv= sph_kernel_deriv
 
+################################### OBSERVATIONS ##############################
 ### compute density at z_obs
-
-def compute_dens(z,zsun,z_obs,h_obs,w=None):
-    if w is None: w= numpy.ones_like(z)
+def compute_dens(z,zsun,z_obs,h_obs,w=None,kernel=epanechnikov_kernel):
+    if w is None: w= numpy.ones_like(z)/float(len(z))
     dens= numpy.zeros_like(z_obs)
     for jj,zo in enumerate(z_obs):
-        dens[jj]= numpy.sum(w*kernel(numpy.fabs(zo-z+zsun),h_obs))/len(z)
+        dens[jj]= numpy.sum(w*kernel(numpy.fabs(zo-z+zsun),h_obs))
     return dens
+### compute_v2
+def compute_v2(z,vz,zsun,z_obs,h_obs,w=None,kernel=epanechnikov_kernel):
+    if w is None: w= numpy.ones_like(z)
+    v2= numpy.zeros_like(z_obs)
+    for jj,zo in enumerate(z_obs):
+        v2[jj]= numpy.sum(w*kernel(numpy.fabs(zo-z+zsun),h_obs)*vz**2.)\
+            /numpy.sum(w*kernel(numpy.fabs(zo-z+zsun),h_obs))
+    return v2
+### compute_densv2
+def compute_densv2(z,vz,zsun,z_obs,h_obs,w=None,kernel=epanechnikov_kernel):
+    if w is None: w= numpy.ones_like(z)
+    densv2= numpy.zeros_like(z_obs)
+    for jj,zo in enumerate(z_obs):
+        densv2[jj]= numpy.sum(w*kernel(numpy.fabs(zo-z+zsun),h_obs)*vz**2.)/len(z)
+    return densv2
 
-### M2M force of change definitions
+############################### M2M FORCE-OF-CHANGE ###########################
+# Due to the prior
+def force_of_change_entropy_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
+                                    eps,mu,w_prior):
+    return -eps*w_m2m*mu*(numpy.log(w_m2m/w_prior)+1.)
 
-def force_of_change_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
-                            eps,mu,w_prior,
-                            z_obs,dens_obs,dens_obs_noise,
-                            h_m2m=0.02,
-                            delta_m2m=None):
+def force_of_change_dirichlet_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
+                                      eps,mu,w_prior):
+    return eps*w_prior
+
+#Due to the density
+#For the weights
+def force_of_change_density_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
+                                    eps,mu,w_prior,
+                                    z_obs,dens_obs,dens_obs_noise,
+                                    h_m2m=0.02,kernel=epanechnikov_kernel,
+                                    delta_m2m=None):
     """Computes the force of change for all of the weights"""
     delta_m2m_new= numpy.zeros_like(z_obs)
     Wij= numpy.zeros((len(z_obs),len(z_m2m)))
     for jj,zo in enumerate(z_obs):
         Wij[jj]= kernel(numpy.fabs(zo-z_m2m+zsun_m2m),h_m2m)
-        delta_m2m_new[jj]= (numpy.sum(w_m2m*Wij[jj])/len(z_m2m)-dens_obs[jj])/dens_obs_noise[jj]
+        delta_m2m_new[jj]= (numpy.sum(w_m2m*Wij[jj])-dens_obs[jj])/dens_obs_noise[jj]
     if delta_m2m is None: delta_m2m= delta_m2m_new
-    return (-eps*w_m2m*(numpy.sum(numpy.tile(delta_m2m/dens_obs_noise,(len(z_m2m),1)).T*Wij,axis=0)\
-                        +mu*(numpy.log(w_m2m/w_prior)+1.)),delta_m2m_new)
+    return (-eps*w_m2m*numpy.sum(numpy.tile(delta_m2m/dens_obs_noise,(len(z_m2m),1)).T*Wij,axis=0),delta_m2m_new)
 
-### M2M cycle definition
-
-def run_m2m_weights(w_init,A_init,phi_init,
-                    omega_m2m,zsun_m2m,
-                    z_obs,dens_obs,dens_obs_noise,
-                    step=0.001,nstep=1000,
-                    eps=0.1,mu=1.,
-                    h_m2m=0.02,
-                    smooth=None,
-                    output_wevolution=False):
+################################ M2M OPTIMIZATION #############################
+def run_m2m(w_init,z_init,vz_init,
+            omega_m2m,zsun_m2m,
+            z_obs,dens_obs,dens_obs_noise,
+            step=0.001,nstep=1000,
+            eps=0.1,mu=1.,
+            h_m2m=0.02,kernel=epanechnikov_kernel,
+            smooth=None,prior='entropy',
+            output_wevolution=False):
     """
     NAME:
-       run_m2m_weights
+       run_m2m
     PURPOSE:
-       Run M2M on the harmonic-oscillator data to optimize just the weights of the orbits
+       Run M2M on the harmonic-oscillator data to optimize
     INPUT:
        w_init - initial weights [N]
-       A_init - initial zmax [N]
-       phi_init - initial angle (rad) [N]
+       z_init - initial z [N]
+       vz_init - initial vz (rad) [N]
        omega_m2m - potential parameter omega
        zsun_m2m - Sun's height above the plane [N]
        z_obs - heights at which the density observations are made
@@ -85,7 +122,9 @@ def run_m2m_weights(w_init,A_init,phi_init,
        nstep= number of steps to integrate the orbits for
        eps= M2M epsilon parameter
        mu= M2M entropy parameter mu
-       h_m2m= kernel size parameter for computing the observables, this should be same as h_obs
+       h_m2m= kernel size parameter for computing the observables
+       kernel= a smoothing kernel
+       prior= ('entropy' or 'dirichlet')
        smooth= smoothing parameter alpha (None for no smoothing)
        output_wevolution= if set to an integer, return the time evolution of this many randomly selected weights
     OUTPUT:
@@ -95,9 +134,12 @@ def run_m2m_weights(w_init,A_init,phi_init,
        2016-12-06 - Written - Bovy (UofT/CCA)
        2016-12-08 - Added output_wevolution - Bovy (UofT/CCA)
        2016-12-16 - Added explicit noise in the observed densities - Bovy (UofT/CCA)
+       2017-02-22 - Refactored to more general function - Bovy (UofT/CCA)
     """
+    w_init= w_init/numpy.sum(w_init) # make sure that they are normalized
     w_out= copy.deepcopy(w_init)
     Q_out= []
+    A_init, phi_init= zvz_to_Aphi(z_init,vz_init,omega_m2m)
     if output_wevolution:
         rndindx= numpy.random.permutation(len(w_out))[:output_wevolution]
         wevol= numpy.zeros((output_wevolution,nstep))
@@ -115,16 +157,24 @@ def run_m2m_weights(w_init,A_init,phi_init,
         phi_now= omega_m2m*ii*step+phi_init
         z_m2m= A_init*numpy.cos(phi_now)
         vz_m2m= -A_init*omega_m2m*numpy.sin(phi_now) # unnecessary
-        fcw, delta_m2m_new= force_of_change_weights(w_out,zsun_m2m,
-                                                    z_m2m,vz_m2m,
-                                                    eps,mu,w_init,
-                                                    z_obs,
-                                                    dens_obs,dens_obs_noise,
-                                                    h_m2m=h_m2m,
-                                                    delta_m2m=delta_m2m)
+        fcw, delta_m2m_new=\
+            force_of_change_density_weights(w_out,zsun_m2m,
+                                            z_m2m,vz_m2m,
+                                            eps,mu,w_init,
+                                            z_obs,
+                                            dens_obs,dens_obs_noise,
+                                            h_m2m=h_m2m,kernel=kernel,
+                                            delta_m2m=delta_m2m)
+        # Add prior
+        if prior.lower() == 'entropy':
+            fcw+= force_of_change_entropy_weights(w_out,zsun_m2m,z_m2m,
+                                                  vz_m2m,eps,mu,w_init)
+        else:
+            fcw+= force_of_change_dirichlet_weights(w_out,zsun_m2m,z_m2m,
+                                                    vz_m2m,eps,mu,w_init)
         w_out+= step*fcw
-        w_out/= numpy.sum(w_out)/len(A_init)
         w_out[w_out < 0.]= 10.**-16.
+        w_out/= numpy.sum(w_out)
         if not smooth is None:
             Q_out.append(delta_m2m**2.)
         else:
@@ -157,13 +207,13 @@ def force_of_change_zsun(w_m2m,zsun_m2m,z_m2m,vz_m2m,
 ### run M2M with zsun change
 
 def run_m2m_weights_zsun(w_init,A_init,phi_init,
-                        omega_m2m,zsun_m2m,
-                        z_obs,dens_obs,dens_obs_noise,
-                        step=0.001,nstep=1000,
-                        eps=0.1,eps_zo=0.001,mu=1.,
-                        h_m2m=0.02,
-                        smooth=None,
-                        output_wevolution=False):
+                         omega_m2m,zsun_m2m,
+                         z_obs,dens_obs,dens_obs_noise,
+                         step=0.001,nstep=1000,
+                         eps=0.1,eps_zo=0.001,mu=1.,
+                         h_m2m=0.02,
+                         smooth=None,
+                         output_wevolution=False):
     """
     NAME:
        run_m2m_weights_zsun
@@ -171,8 +221,8 @@ def run_m2m_weights_zsun(w_init,A_init,phi_init,
        Run M2M on the harmonic-oscillator data to optimize the weights of the orbits as well as the Sun's height
     INPUT:
        w_init - initial weights [N]
-       A_init - initial zmax [N]
-       phi_init - initial angle (rad) [N]
+       z_init - initial z [N]
+       vz_init - initial vz [N]
        omega_m2m - potential parameter omega
        zsun_m2m - Sun's height above the plane [N]
        z_obs - heights at which the density observations are made
@@ -251,15 +301,6 @@ def run_m2m_weights_zsun(w_init,A_init,phi_init,
         out= out+(wevol,rndindx,)
     return out
 
-
-### compute_densv2
-
-def compute_densv2(z,vz,zsun,z_obs,h_obs,w=None):
-    if w is None: w= numpy.ones_like(z)
-    densv2= numpy.zeros_like(z_obs)
-    for jj,zo in enumerate(z_obs):
-        densv2[jj]= numpy.sum(w*kernel(numpy.fabs(zo-z+zsun),h_obs)*vz**2.)/len(z)
-    return densv2
 
 ### force_of_change_weights_densv2
 
