@@ -182,8 +182,8 @@ def run_m2m(w_init,z_init,vz_init,
                                                     vz_m2m,eps,mu,w_init)
         if runasy:
             # Transform derivatives to derivatives in y
-            jac,djac= simplex.Rn_to_simplex_jac(y_out,dlogdet=True)
-            fcw= simplex.simplex_to_Rn_derivs(fcw/w_out/eps,jac) # ignore djac
+            fcw= simplex.simplex_to_Rn_derivs_fast(y_out,fcw/w_out/eps,
+                                                   add_dlogdet=False)
             y_out+= step*eps*fcw
             w_out= simplex.Rn_to_simplex(y_out)
         else:
