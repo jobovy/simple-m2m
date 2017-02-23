@@ -97,7 +97,7 @@ def simplex_to_Rn_derivs(dx,jac):
     """
     return numpy.dot(jac.T,dx)
 
-def simplex_to_Rn_derivs_fast(y,dx):
+def simplex_to_Rn_derivs_fast(y,dx,add_dlogdet=False):
     """
     NAME:
        simplex_to_Rn_derivs_fast
@@ -105,7 +105,8 @@ def simplex_to_Rn_derivs_fast(y,dx):
        transform derivatives wrt the simplex (d / d x) to derivatives with respect to the R^N-1 variables in a fast manner
     INPUT:
        y \in R^n
-       dx - derivatives
+       dx - derivatives with respect to the simplex
+       add_dlogdet= (False) if True, add the derivative of the log of the determinant of the Jacobian wrt y
     OUTPUT:
        derivatives wrt y
     HISTORY:
@@ -114,4 +115,5 @@ def simplex_to_Rn_derivs_fast(y,dx):
     w, x= Rn_to_simplex(y,_retz=True)
     out= numpy.cumsum((w*dx)[::-1])[::-1]
     out= out[1:]*(1.-x)-x*(w*dx)[:-1]
+    if add_dlogdet: out+= (len(x)-numpy.arange(len(x)))*(1.-x)-x
     return out
