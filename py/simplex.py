@@ -95,4 +95,4 @@ def simplex_to_Rn_derivs(dx,jac):
     HISTORY:
        2017-02-22 - Written - Bovy (UofT/CCA)
     """
-    return numpy.dot(jac,dx)
+    return numpy.dot(jac.T,dx)
