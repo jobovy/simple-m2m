@@ -96,3 +96,22 @@ def simplex_to_Rn_derivs(dx,jac):
        2017-02-22 - Written - Bovy (UofT/CCA)
     """
     return numpy.dot(jac.T,dx)
+
+def simplex_to_Rn_derivs_fast(y,dx):
+    """
+    NAME:
+       simplex_to_Rn_derivs_fast
+    PURPOSE:
+       transform derivatives wrt the simplex (d / d x) to derivatives with respect to the R^N-1 variables in a fast manner
+    INPUT:
+       y \in R^n
+       dx - derivatives
+    OUTPUT:
+       derivatives wrt y
+    HISTORY:
+       2017-02-23 - Written - Bovy (UofT/CCA)
+    """
+    w, x= Rn_to_simplex(y,_retz=True)
+    out= numpy.cumsum((w*dx)[::-1])[::-1]
+    out= out[1:]*(1.-x)-x*(w*dx)[:-1]
+    return out
