@@ -1,6 +1,7 @@
 # hom2m.py: Simple Harmonic-Oscillator M2M implementation
 import numpy
 import copy
+import simplex
 
 ######################### COORDINATE TRANSFORMATIONS ##########################
 def zvz_to_Aphi(z,vz,omega):
@@ -55,7 +56,7 @@ def compute_dens(z,zsun,z_obs,h_obs,w=None,kernel=epanechnikov_kernel):
     return dens
 ### compute_v2
 def compute_v2(z,vz,zsun,z_obs,h_obs,w=None,kernel=epanechnikov_kernel):
-    if w is None: w= numpy.ones_like(z)
+    if w is None: w= numpy.ones_like(z)/float(len(z))
     v2= numpy.zeros_like(z_obs)
     for jj,zo in enumerate(z_obs):
         v2[jj]= numpy.sum(w*kernel(numpy.fabs(zo-z+zsun),h_obs)*vz**2.)\
@@ -63,10 +64,10 @@ def compute_v2(z,vz,zsun,z_obs,h_obs,w=None,kernel=epanechnikov_kernel):
     return v2
 ### compute_densv2
 def compute_densv2(z,vz,zsun,z_obs,h_obs,w=None,kernel=epanechnikov_kernel):
-    if w is None: w= numpy.ones_like(z)
+    if w is None: w= numpy.ones_like(z)/float(len(z))
     densv2= numpy.zeros_like(z_obs)
     for jj,zo in enumerate(z_obs):
-        densv2[jj]= numpy.sum(w*kernel(numpy.fabs(zo-z+zsun),h_obs)*vz**2.)/len(z)
+        densv2[jj]= numpy.sum(w*kernel(numpy.fabs(zo-z+zsun),h_obs)*vz**2.)
     return densv2
 
 ############################### M2M FORCE-OF-CHANGE ###########################
@@ -93,7 +94,10 @@ def force_of_change_density_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
         Wij[jj]= kernel(numpy.fabs(zo-z_m2m+zsun_m2m),h_m2m)
         delta_m2m_new[jj]= (numpy.sum(w_m2m*Wij[jj])-dens_obs[jj])/dens_obs_noise[jj]
     if delta_m2m is None: delta_m2m= delta_m2m_new
-    return (-eps*w_m2m*numpy.sum(numpy.tile(delta_m2m/dens_obs_noise,(len(z_m2m),1)).T*Wij,axis=0),delta_m2m_new)
+    return (-eps*w_m2m
+             *numpy.sum(numpy.tile(delta_m2m/dens_obs_noise,(len(z_m2m),1)).T
+                        *Wij,axis=0),
+             delta_m2m_new)
 
 ################################ M2M OPTIMIZATION #############################
 def run_m2m(w_init,z_init,vz_init,
@@ -103,6 +107,7 @@ def run_m2m(w_init,z_init,vz_init,
             eps=0.1,mu=1.,
             h_m2m=0.02,kernel=epanechnikov_kernel,
             smooth=None,prior='entropy',
+            runasy=False,
             output_wevolution=False):
     """
     NAME:
@@ -126,6 +131,7 @@ def run_m2m(w_init,z_init,vz_init,
        kernel= a smoothing kernel
        prior= ('entropy' or 'dirichlet')
        smooth= smoothing parameter alpha (None for no smoothing)
+       runasy= (False) rather than updating the weights, update the weights transformed to y (this exactly conserves the sum of the weights)
        output_wevolution= if set to an integer, return the time evolution of this many randomly selected weights
     OUTPUT:
        (w_out,Q_out,[wevol,rndindx]) - (output weights [N],objective function as a function of time,
@@ -140,6 +146,8 @@ def run_m2m(w_init,z_init,vz_init,
     w_out= copy.deepcopy(w_init)
     Q_out= []
     A_init, phi_init= zvz_to_Aphi(z_init,vz_init,omega_m2m)
+    if runasy:
+        y_out= simplex.simplex_to_Rn(w_out)
     if output_wevolution:
         rndindx= numpy.random.permutation(len(w_out))[:output_wevolution]
         wevol= numpy.zeros((output_wevolution,nstep))
@@ -172,9 +180,16 @@ def run_m2m(w_init,z_init,vz_init,
         else:
             fcw+= force_of_change_dirichlet_weights(w_out,zsun_m2m,z_m2m,
                                                     vz_m2m,eps,mu,w_init)
-        w_out+= step*fcw
-        w_out[w_out < 0.]= 10.**-16.
-        w_out/= numpy.sum(w_out)
+        if runasy:
+            # Transform derivatives to derivatives in y
+            jac,djac= simplex.Rn_to_simplex_jac(y_out,dlogdet=True)
+            fcw= simplex.simplex_to_Rn_derivs(fcw/w_out/eps,jac) # ignore djac
+            y_out+= step*eps*fcw
+            w_out= simplex.Rn_to_simplex(y_out)
+        else:
+            w_out+= step*fcw
+            w_out[w_out < 0.]= 10.**-16.
+            w_out/= numpy.sum(w_out)
         if not smooth is None:
             Q_out.append(delta_m2m**2.)
         else:
