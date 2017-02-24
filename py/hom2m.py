@@ -101,7 +101,7 @@ def force_of_change_density_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
 
 # Due to the velocity
 # For the weights
-def force_of_change_weights_densv2(w_m2m,zsun_m2m,z_m2m,vz_m2m,
+def force_of_change_densv2_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
                                    eps,mu,w_prior,
                                    z_obs,densv2_obs,densv2_obs_noise,
                                    h_m2m,kernel=epanechnikov_kernel,
@@ -117,6 +117,66 @@ def force_of_change_weights_densv2(w_m2m,zsun_m2m,z_m2m,vz_m2m,
              *numpy.sum(numpy.tile(deltav2_m2m/densv2_obs_noise,
                                    (len(z_m2m),1)).T*Wij,axis=0)*vz_m2m**2.,
              deltav2_m2m_new)
+
+########################### M2M SECOND DERIVATIVES ############################
+# All of these are minus times the actual second derivative (so they plug into 
+# the calculation of the Hessian)
+
+# ALL CURRENTLY DIVIDE BY WEIGHTS FOR NO GOOD REASON
+
+# Prior is diagonal, so these return just the diagonal
+
+# Due to the prior
+def force_of_change_entropy_weights_deriv(w_m2m,zsun_m2m,z_m2m,vz_m2m,
+                                          mu,w_prior):
+    return mu/w_m2m**2.
+
+def force_of_change_dirichlet_weights_deriv(w_m2m,zsun_m2m,z_m2m,vz_m2m,
+                                            mu,w_prior):
+    return mu*w_prior/w_m2m**3.
+
+# The likelihood is full 2D, option to just return the diagonal
+
+#Due to the density
+#For the weights
+def force_of_change_density_weights_deriv(w_m2m,zsun_m2m,z_m2m,vz_m2m,
+                                          mu,w_prior,
+                                          z_obs,dens_obs,dens_obs_noise,
+                                          h_m2m=0.02,
+                                          kernel=epanechnikov_kernel,
+                                          diag=False):
+    if diag:
+        out= numpy.empty((len(z_m2m)))
+    else:
+        out= numpy.empty((len(z_m2m),len(z_m2m)))
+    for jj,zo in enumerate(z_obs):
+        Wij= numpy.atleast_2d(kernel(numpy.fabs(zo-z_m2m+zsun_m2m),h_m2m)
+                              /numpy.sqrt(w_m2m))
+        if diag:
+            out+= Wij[0]**2./dens_obs_noise[jj]**2.
+        else:
+            out+= numpy.dot(Wij.T,Wij)/dens_obs_noise[jj]**2.
+    return out
+
+# Due to the velocity
+# For the weights
+def force_of_change_densv2_weights_deriv(w_m2m,zsun_m2m,z_m2m,vz_m2m,
+                                         mu,w_prior,
+                                         z_obs,densv2_obs,densv2_obs_noise,
+                                         h_m2m,kernel=epanechnikov_kernel,
+                                         diag=False):
+    if diag:
+        out= numpy.empty((len(z_m2m)))
+    else:
+        out= numpy.empty((len(z_m2m),len(z_m2m)))
+    for jj,zo in enumerate(z_obs):
+        Wij= numpy.atleast_2d(vz_m2m**2./numpy.sqrt(w_m2m)\
+                                  *kernel(numpy.fabs(zo-z_m2m+zsun_m2m),h_m2m))
+        if diag:
+            out+= Wij[0]**2./densv2_obs_noise[jj]**2.
+        else:
+            out+= numpy.dot(Wij.T,Wij)/densv2_obs_noise[jj]**2.
+    return out
 
 ################################ M2M OPTIMIZATION #############################
 def run_m2m(w_init,z_init,vz_init,
@@ -201,7 +261,7 @@ def run_m2m(w_init,z_init,vz_init,
         # Add velocity constraint if given
         if not densv2_obs is None:
             fcwv2, deltav2_m2m_new= \
-                force_of_change_weights_densv2(w_out,zsun_m2m,
+                force_of_change_densv2_weights(w_out,zsun_m2m,
                                                z_m2m,vz_m2m,
                                                eps,mu,w_init,
                                                z_obs,
@@ -244,6 +304,85 @@ def run_m2m(w_init,z_init,vz_init,
     if output_wevolution:
         out= out+(wevol,rndindx,)
     return out
+
+def estimate_hessian_m2m(w_out,z_init,vz_init,
+                         omega_m2m,zsun_m2m,
+                         z_obs,dens_obs,dens_obs_noise,
+                         densv2_obs=None,densv2_obs_noise=None,
+                         w_prior=None,
+                         step=0.001,nstep=1000,mu=1.,
+                         h_m2m=0.02,kernel=epanechnikov_kernel,
+                         prior='entropy',diag=False):
+    """
+    NAME:
+       estimate_hessian__m2m
+    PURPOSE:
+       Estimate the Hessian for an M2M optimization
+    INPUT:
+       w_out - weights [N]
+       z_init - initial z [N]
+       vz_init - initial vz (rad) [N]
+       omega_m2m - potential parameter omega
+       zsun_m2m - Sun's height above the plane [N]
+       z_obs - heights at which the density observations are made
+       dens_obs - observed densities
+       dens_obs_noise - noise in the observed densities
+       densv2_obs= (None) observed density x velocity-squareds (optional)
+       densv2_obs_noise= (None) noise in the observed densities x velocity-squareds
+       w_prior= (None) prior weights
+       step= stepsize of orbit integration
+       nstep= number of steps to integrate the orbits for
+       mu= M2M entropy parameter mu
+       h_m2m= kernel size parameter for computing the observables
+       kernel= a smoothing kernel
+       prior= ('entropy' or 'dirichlet')
+       diag= (False) if True, only copute the diagonal of the Hessian
+    OUTPUT:
+       Hessian
+    HISTORY:
+       2017-02-24 - Written - Bovy (UofT/CCA)
+    """
+    if w_prior is None:
+        w_prior= numpy.ones_like(w_out)/float(len(w_out))
+    A_init, phi_init= zvz_to_Aphi(z_init,vz_init,omega_m2m)
+    if diag:
+        out= numpy.empty((len(w_out)))
+    else:
+        out= numpy.empty((len(w_out),len(w_out)))
+    # To easily deal with the shape of the matrix for the prior
+    if diag:
+        prior_shape= lambda x: x
+    else:
+        prior_shape= lambda x: numpy.diagflat(x)
+    for ii in range(nstep):
+        # Compute current (z,vz)
+        phi_now= omega_m2m*ii*step+phi_init
+        z_m2m= A_init*numpy.cos(phi_now)
+        vz_m2m= -A_init*omega_m2m*numpy.sin(phi_now) # unnecessary
+        # Evaluate second derivatives
+        out+= force_of_change_density_weights_deriv(\
+            w_out,zsun_m2m,z_m2m,vz_m2m,
+            mu,w_prior,
+            z_obs,dens_obs,dens_obs_noise,
+            h_m2m,kernel=kernel,diag=diag)
+        # Add velocity constraint if given
+        if not densv2_obs is None:
+            out+= force_of_change_densv2_weights_deriv(\
+                w_out,zsun_m2m,z_m2m,vz_m2m,
+                mu,w_prior,
+                z_obs,densv2_obs,densv2_obs_noise,
+                h_m2m,kernel=kernel,diag=diag)
+        # Add prior
+        if prior.lower() == 'entropy':
+            out+= prior_shape(force_of_change_entropy_weights_deriv(\
+                    w_out,zsun_m2m,z_m2m,vz_m2m,mu,w_prior))
+        else:
+            out+= prior_shape(force_of_change_dirichlet_weights_deriv(\
+                    w_out,zsun_m2m,z_m2m,vz_m2m,mu,w_prior))
+    return out/nstep
+
+
+
 
 ### zsun force of change
 
@@ -357,7 +496,7 @@ def run_m2m_weights_zsun(w_init,A_init,phi_init,
     return out
 
 
-### force_of_change_weights_densv2
+### force_of_change_densv2_weights
 
 ### run_m2m_weights_wdensv2
 
