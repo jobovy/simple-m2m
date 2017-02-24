@@ -99,10 +99,30 @@ def force_of_change_density_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
                         *Wij,axis=0),
              delta_m2m_new)
 
+# Due to the velocity
+# For the weights
+def force_of_change_weights_densv2(w_m2m,zsun_m2m,z_m2m,vz_m2m,
+                                   eps,mu,w_prior,
+                                   z_obs,densv2_obs,densv2_obs_noise,
+                                   h_m2m,kernel=epanechnikov_kernel,
+                                   deltav2_m2m=None):
+    """Computes the force of change for all of the weights due to the velocity constraint"""
+    deltav2_m2m_new= numpy.zeros_like(z_obs)
+    Wij= numpy.zeros((len(z_obs),len(z_m2m)))
+    for jj,zo in enumerate(z_obs):
+        Wij[jj]= kernel(numpy.fabs(zo-z_m2m+zsun_m2m),h_m2m)
+        deltav2_m2m_new[jj]= (numpy.sum(w_m2m*Wij[jj]*vz_m2m**2.)-densv2_obs[jj])/densv2_obs_noise[jj]
+    if deltav2_m2m is None: deltav2_m2m= deltav2_m2m_new
+    return (-eps*w_m2m
+             *numpy.sum(numpy.tile(deltav2_m2m/densv2_obs_noise,
+                                   (len(z_m2m),1)).T*Wij,axis=0)*vz_m2m**2.,
+             deltav2_m2m_new)
+
 ################################ M2M OPTIMIZATION #############################
 def run_m2m(w_init,z_init,vz_init,
             omega_m2m,zsun_m2m,
             z_obs,dens_obs,dens_obs_noise,
+            densv2_obs=None,densv2_obs_noise=None,
             step=0.001,nstep=1000,
             eps=0.1,mu=1.,
             h_m2m=0.02,kernel=epanechnikov_kernel,
@@ -123,6 +143,8 @@ def run_m2m(w_init,z_init,vz_init,
        z_obs - heights at which the density observations are made
        dens_obs - observed densities
        dens_obs_noise - noise in the observed densities
+       densv2_obs= (None) observed density x velocity-squareds (optional)
+       densv2_obs_noise= (None) noise in the observed densities x velocity-squareds
        step= stepsize of orbit integration
        nstep= number of steps to integrate the orbits for
        eps= M2M epsilon parameter
@@ -156,10 +178,13 @@ def run_m2m(w_init,z_init,vz_init,
         phi_now= phi_init
         z_m2m= A_init*numpy.cos(phi_now)
         vz_m2m= -A_init*omega_m2m*numpy.sin(phi_now) # unnecessary
-        dens_init= compute_dens(z_m2m,zsun_m2m,z_obs,h_m2m,w=w_init)
+        dens_init= compute_dens(z_m2m,zsun_m2m,z_obs,h_m2mw=w_init)
         delta_m2m= (dens_init-dens_obs)/dens_obs_noise
+        densv2_init= compute_densv2(z_m2m,vz_m2m,zsun_m2m,z_obs,w=w_init)
+        deltav2_m2m= (densv2_init-densv2_obs)/densv2_obs_noise
     else:
         delta_m2m= None
+        deltav2_m2m= None
     for ii in range(nstep):
         # Compute current (z,vz)
         phi_now= omega_m2m*ii*step+phi_init
@@ -173,6 +198,20 @@ def run_m2m(w_init,z_init,vz_init,
                                             dens_obs,dens_obs_noise,
                                             h_m2m=h_m2m,kernel=kernel,
                                             delta_m2m=delta_m2m)
+        # Add velocity constraint if given
+        if not densv2_obs is None:
+            fcwv2, deltav2_m2m_new= \
+                force_of_change_weights_densv2(w_out,zsun_m2m,
+                                               z_m2m,vz_m2m,
+                                               eps,mu,w_init,
+                                               z_obs,
+                                               densv2_obs,densv2_obs_noise,
+                                               h_m2m=h_m2m,
+                                               kernel=kernel,
+                                               deltav2_m2m=deltav2_m2m)
+        else:
+            fcwv2= 0.
+        fcw+= fcwv2
         # Add prior
         if prior.lower() == 'entropy':
             fcw+= force_of_change_entropy_weights(w_out,zsun_m2m,z_m2m,
@@ -197,6 +236,7 @@ def run_m2m(w_init,z_init,vz_init,
         # Increment smoothing
         if not smooth is None:
             delta_m2m+= step*smooth*(delta_m2m_new-delta_m2m)
+            deltav2_m2m+= step*smooth*(deltav2_m2m_new-deltav2_m2m)
         # Record random weights if requested
         if output_wevolution:
             wevol[:,ii]= w_out[rndindx]
@@ -318,21 +358,6 @@ def run_m2m_weights_zsun(w_init,A_init,phi_init,
 
 
 ### force_of_change_weights_densv2
-
-def force_of_change_weights_densv2(w_m2m,zsun_m2m,z_m2m,vz_m2m,
-                               eps,mu,w_prior,
-                               z_obs,densv2_obs,densv2_obs_noise,
-                               h_m2m,
-                               deltav2_m2m=None):
-    """Computes the force of change for all of the weights due to the velocity constraint"""
-    deltav2_m2m_new= numpy.zeros_like(z_obs)
-    Wij= numpy.zeros((len(z_obs),len(z_m2m)))
-    for jj,zo in enumerate(z_obs):
-        Wij[jj]= kernel(numpy.fabs(zo-z_m2m+zsun_m2m),h_m2m)
-        deltav2_m2m_new[jj]= (numpy.sum(w_m2m*Wij[jj]*vz_m2m**2.)/len(z_m2m)-densv2_obs[jj])/densv2_obs_noise[jj]
-    if deltav2_m2m is None: deltav2_m2m= deltav2_m2m_new
-    return (-eps*w_m2m*numpy.sum(numpy.tile(deltav2_m2m/densv2_obs_noise,(len(z_m2m),1)).T*Wij,axis=0)*vz_m2m**2.,
-            deltav2_m2m_new)
 
 ### run_m2m_weights_wdensv2
 
