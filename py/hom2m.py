@@ -71,19 +71,19 @@ def compute_densv2(z,vz,zsun,z_obs,h_obs,w=None,kernel=epanechnikov_kernel):
     return densv2
 
 ############################### M2M FORCE-OF-CHANGE ###########################
-# Due to the prior
-def force_of_change_entropy_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
-                                    eps,mu,w_prior):
-    return -eps*w_m2m*mu*(numpy.log(w_m2m/w_prior)+1.)
+# All defined here as the straight d constraint / d parameter (i.e., does *not*
+# include things like eps, weight)
 
-def force_of_change_dirichlet_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
-                                      eps,mu,w_prior):
-    return eps*w_prior
+# Due to the prior
+def force_of_change_entropy_weights(w_m2m,mu,w_prior):
+    return -mu*(numpy.log(w_m2m/w_prior)+1.)
+
+def force_of_change_dirichlet_weights(w_m2m,mu,w_prior):
+    return w_prior/w_m2m
 
 #Due to the density
 #For the weights
 def force_of_change_density_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
-                                    eps,mu,w_prior,
                                     z_obs,dens_obs,dens_obs_noise,
                                     h_m2m=0.02,kernel=epanechnikov_kernel,
                                     delta_m2m=None):
@@ -94,15 +94,13 @@ def force_of_change_density_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
         Wij[jj]= kernel(numpy.fabs(zo-z_m2m+zsun_m2m),h_m2m)
         delta_m2m_new[jj]= (numpy.sum(w_m2m*Wij[jj])-dens_obs[jj])/dens_obs_noise[jj]
     if delta_m2m is None: delta_m2m= delta_m2m_new
-    return (-eps*w_m2m
-             *numpy.sum(numpy.tile(delta_m2m/dens_obs_noise,(len(z_m2m),1)).T
-                        *Wij,axis=0),
+    return (-numpy.sum(numpy.tile(delta_m2m/dens_obs_noise,(len(z_m2m),1)).T
+                       *Wij,axis=0),
              delta_m2m_new)
 
 # Due to the velocity
 # For the weights
 def force_of_change_densv2_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
-                                   eps,mu,w_prior,
                                    z_obs,densv2_obs,densv2_obs_noise,
                                    h_m2m,kernel=epanechnikov_kernel,
                                    deltav2_m2m=None):
@@ -113,34 +111,28 @@ def force_of_change_densv2_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
         Wij[jj]= kernel(numpy.fabs(zo-z_m2m+zsun_m2m),h_m2m)
         deltav2_m2m_new[jj]= (numpy.sum(w_m2m*Wij[jj]*vz_m2m**2.)-densv2_obs[jj])/densv2_obs_noise[jj]
     if deltav2_m2m is None: deltav2_m2m= deltav2_m2m_new
-    return (-eps*w_m2m
-             *numpy.sum(numpy.tile(deltav2_m2m/densv2_obs_noise,
-                                   (len(z_m2m),1)).T*Wij,axis=0)*vz_m2m**2.,
+    return (-numpy.sum(numpy.tile(deltav2_m2m/densv2_obs_noise,
+                                  (len(z_m2m),1)).T*Wij,axis=0)*vz_m2m**2.,
              deltav2_m2m_new)
 
 ########################### M2M SECOND DERIVATIVES ############################
 # All of these are minus times the actual second derivative (so they plug into 
 # the calculation of the Hessian)
 
-# ALL CURRENTLY DIVIDE BY WEIGHTS FOR NO GOOD REASON
-
 # Prior is diagonal, so these return just the diagonal
 
 # Due to the prior
-def force_of_change_entropy_weights_deriv(w_m2m,zsun_m2m,z_m2m,vz_m2m,
-                                          mu,w_prior):
-    return mu/w_m2m**2.
+def force_of_change_entropy_weights_deriv(w_m2m,mu,w_prior):
+    return mu/w_m2m
 
-def force_of_change_dirichlet_weights_deriv(w_m2m,zsun_m2m,z_m2m,vz_m2m,
-                                            mu,w_prior):
-    return mu*w_prior/w_m2m**3.
+def force_of_change_dirichlet_weights_deriv(w_m2m,mu,w_prior):
+    return mu*w_prior/w_m2m**2.
 
 # The likelihood is full 2D, option to just return the diagonal
 
 #Due to the density
 #For the weights
 def force_of_change_density_weights_deriv(w_m2m,zsun_m2m,z_m2m,vz_m2m,
-                                          mu,w_prior,
                                           z_obs,dens_obs,dens_obs_noise,
                                           h_m2m=0.02,
                                           kernel=epanechnikov_kernel,
@@ -150,8 +142,7 @@ def force_of_change_density_weights_deriv(w_m2m,zsun_m2m,z_m2m,vz_m2m,
     else:
         out= numpy.empty((len(z_m2m),len(z_m2m)))
     for jj,zo in enumerate(z_obs):
-        Wij= numpy.atleast_2d(kernel(numpy.fabs(zo-z_m2m+zsun_m2m),h_m2m)
-                              /numpy.sqrt(w_m2m))
+        Wij= numpy.atleast_2d(kernel(numpy.fabs(zo-z_m2m+zsun_m2m),h_m2m))
         if diag:
             out+= Wij[0]**2./dens_obs_noise[jj]**2.
         else:
@@ -161,7 +152,6 @@ def force_of_change_density_weights_deriv(w_m2m,zsun_m2m,z_m2m,vz_m2m,
 # Due to the velocity
 # For the weights
 def force_of_change_densv2_weights_deriv(w_m2m,zsun_m2m,z_m2m,vz_m2m,
-                                         mu,w_prior,
                                          z_obs,densv2_obs,densv2_obs_noise,
                                          h_m2m,kernel=epanechnikov_kernel,
                                          diag=False):
@@ -170,7 +160,7 @@ def force_of_change_densv2_weights_deriv(w_m2m,zsun_m2m,z_m2m,vz_m2m,
     else:
         out= numpy.empty((len(z_m2m),len(z_m2m)))
     for jj,zo in enumerate(z_obs):
-        Wij= numpy.atleast_2d(vz_m2m**2./numpy.sqrt(w_m2m)\
+        Wij= numpy.atleast_2d(vz_m2m**2.\
                                   *kernel(numpy.fabs(zo-z_m2m+zsun_m2m),h_m2m))
         if diag:
             out+= Wij[0]**2./densv2_obs_noise[jj]**2.
@@ -224,7 +214,7 @@ def run_m2m(w_init,z_init,vz_init,
        2016-12-16 - Added explicit noise in the observed densities - Bovy (UofT/CCA)
        2017-02-22 - Refactored to more general function - Bovy (UofT/CCA)
     """
-    w_init= w_init/numpy.sum(w_init) # make sure that they are normalized
+    #w_init= w_init/numpy.sum(w_init) # make sure that they are normalized
     w_out= copy.deepcopy(w_init)
     Q_out= []
     A_init, phi_init= zvz_to_Aphi(z_init,vz_init,omega_m2m)
@@ -235,12 +225,9 @@ def run_m2m(w_init,z_init,vz_init,
         wevol= numpy.zeros((output_wevolution,nstep))
     if not smooth is None:
         # Smooth the constraints
-        phi_now= phi_init
-        z_m2m= A_init*numpy.cos(phi_now)
-        vz_m2m= -A_init*omega_m2m*numpy.sin(phi_now) # unnecessary
-        dens_init= compute_dens(z_m2m,zsun_m2m,z_obs,h_m2mw=w_init)
+        dens_init= compute_dens(z_init,zsun_m2m,z_obs,h_m2mw=w_init)
         delta_m2m= (dens_init-dens_obs)/dens_obs_noise
-        densv2_init= compute_densv2(z_m2m,vz_m2m,zsun_m2m,z_obs,w=w_init)
+        densv2_init= compute_densv2(z_init,vz_init,zsun_m2m,z_obs,w=w_init)
         deltav2_m2m= (densv2_init-densv2_obs)/densv2_obs_noise
     else:
         delta_m2m= None
@@ -253,7 +240,6 @@ def run_m2m(w_init,z_init,vz_init,
         fcw, delta_m2m_new=\
             force_of_change_density_weights(w_out,zsun_m2m,
                                             z_m2m,vz_m2m,
-                                            eps,mu,w_init,
                                             z_obs,
                                             dens_obs,dens_obs_noise,
                                             h_m2m=h_m2m,kernel=kernel,
@@ -263,7 +249,6 @@ def run_m2m(w_init,z_init,vz_init,
             fcwv2, deltav2_m2m_new= \
                 force_of_change_densv2_weights(w_out,zsun_m2m,
                                                z_m2m,vz_m2m,
-                                               eps,mu,w_init,
                                                z_obs,
                                                densv2_obs,densv2_obs_noise,
                                                h_m2m=h_m2m,
@@ -274,11 +259,10 @@ def run_m2m(w_init,z_init,vz_init,
         fcw+= fcwv2
         # Add prior
         if prior.lower() == 'entropy':
-            fcw+= force_of_change_entropy_weights(w_out,zsun_m2m,z_m2m,
-                                                  vz_m2m,eps,mu,w_init)
+            fcw+= force_of_change_entropy_weights(w_out,eps,mu,w_init)
         else:
-            fcw+= force_of_change_dirichlet_weights(w_out,zsun_m2m,z_m2m,
-                                                    vz_m2m,eps,mu,w_init)
+            fcw+= force_of_change_dirichlet_weights(w_out,mu,w_init)
+        fcw*= eps*w_out
         if runasy:
             # Transform derivatives to derivatives in y
             fcw= simplex.simplex_to_Rn_derivs_fast(y_out,fcw/w_out/eps,
@@ -288,11 +272,18 @@ def run_m2m(w_init,z_init,vz_init,
         else:
             w_out+= step*fcw
             w_out[w_out < 0.]= 10.**-16.
-            w_out/= numpy.sum(w_out)
+            #w_out/= numpy.sum(w_out)
         if not smooth is None:
-            Q_out.append(delta_m2m**2.)
+            if not densv2_obs is None:
+                Q_out.append(numpy.hstack((delta_m2m**2.,deltav2_m2m**2.)))
+            else:
+                Q_out.append(delta_m2m**2.)
         else:
-            Q_out.append(delta_m2m_new**2.)
+            if not densv2_obs is None:
+                Q_out.append(numpy.hstack((delta_m2m_new**2.,
+                                           deltav2_m2m_new**2.)))
+            else:
+                Q_out.append(delta_m2m_new**2.)
         # Increment smoothing
         if not smooth is None:
             delta_m2m+= step*smooth*(delta_m2m_new-delta_m2m)
@@ -357,8 +348,7 @@ def estimate_hessian_m2m(w_out,z_init,vz_init,
     for ii in range(nstep):
         # Compute current (z,vz)
         phi_now= omega_m2m*ii*step+phi_init
-        z_m2m= A_init*numpy.cos(phi_now)
-        vz_m2m= -A_init*omega_m2m*numpy.sin(phi_now) # unnecessary
+        z_m2m, vz_m2m= Aphi_to_zvz(A_init,phi_now,omega_m2m)
         # Evaluate second derivatives
         out+= force_of_change_density_weights_deriv(\
             w_out,zsun_m2m,z_m2m,vz_m2m,
@@ -379,10 +369,7 @@ def estimate_hessian_m2m(w_out,z_init,vz_init,
         else:
             out+= prior_shape(force_of_change_dirichlet_weights_deriv(\
                     w_out,zsun_m2m,z_m2m,vz_m2m,mu,w_prior))
-    return out/nstep
-
-
-
+    return 0.5*(out+out.T)/nstep # numerical inaccuracy
 
 ### zsun force of change
 
