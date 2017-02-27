@@ -115,6 +115,42 @@ def force_of_change_densv2_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
                                   (len(z_m2m),1)).T*Wij,axis=0)*vz_m2m**2.,
              deltav2_m2m_new)
 
+# Short-cuts
+def force_of_change_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
+                            z_obs,dens_obs,dens_obs_noise,
+                            densv2_obs,densv2_obs_noise,
+                            prior,mu,w_prior,
+                            h_m2m=0.02,kernel=epanechnikov_kernel,
+                            delta_m2m=None,deltav2_m2m=None):
+    """Computes the force of change for all of the weights"""
+    fcw, delta_m2m_new=\
+        force_of_change_density_weights(w_m2m,zsun_m2m,
+                                        z_m2m,vz_m2m,
+                                        z_obs,
+                                        dens_obs,dens_obs_noise,
+                                        h_m2m=h_m2m,kernel=kernel,
+                                        delta_m2m=delta_m2m)
+    # Add velocity constraint if given
+    if not densv2_obs is None:
+        fcwv2, deltav2_m2m_new= \
+            force_of_change_densv2_weights(w_m2m,zsun_m2m,
+                                           z_m2m,vz_m2m,
+                                           z_obs,
+                                           densv2_obs,densv2_obs_noise,
+                                           h_m2m=h_m2m,
+                                           kernel=kernel,
+                                           deltav2_m2m=deltav2_m2m)
+    else:
+        fcwv2= 0.
+        deltav2_m2m_new= None
+    fcw+= fcwv2
+    # Add prior
+    if prior.lower() == 'entropy':
+        fcw+= force_of_change_entropy_weights(w_m2m,mu,w_prior)
+    else:
+        fcw+= force_of_change_dirichlet_weights(w_m2m,mu,w_prior)
+    return (fcw,delta_m2m_new,deltav2_m2m_new)
+
 ########################### M2M SECOND DERIVATIVES ############################
 # All of these are minus times the actual second derivative (so they plug into 
 # the calculation of the Hessian)
@@ -237,31 +273,14 @@ def run_m2m(w_init,z_init,vz_init,
         phi_now= omega_m2m*ii*step+phi_init
         z_m2m= A_init*numpy.cos(phi_now)
         vz_m2m= -A_init*omega_m2m*numpy.sin(phi_now) # unnecessary
-        fcw, delta_m2m_new=\
-            force_of_change_density_weights(w_out,zsun_m2m,
-                                            z_m2m,vz_m2m,
-                                            z_obs,
-                                            dens_obs,dens_obs_noise,
-                                            h_m2m=h_m2m,kernel=kernel,
-                                            delta_m2m=delta_m2m)
-        # Add velocity constraint if given
-        if not densv2_obs is None:
-            fcwv2, deltav2_m2m_new= \
-                force_of_change_densv2_weights(w_out,zsun_m2m,
-                                               z_m2m,vz_m2m,
-                                               z_obs,
-                                               densv2_obs,densv2_obs_noise,
-                                               h_m2m=h_m2m,
-                                               kernel=kernel,
-                                               deltav2_m2m=deltav2_m2m)
-        else:
-            fcwv2= 0.
-        fcw+= fcwv2
-        # Add prior
-        if prior.lower() == 'entropy':
-            fcw+= force_of_change_entropy_weights(w_out,eps,mu,w_init)
-        else:
-            fcw+= force_of_change_dirichlet_weights(w_out,mu,w_init)
+        # Compute force of change
+        fcw, delta_m2m_new, deltav2_m2m_new= \
+            force_of_change_weights(w_out,zsun_m2m,z_m2m,vz_m2m,
+                                    z_obs,dens_obs,dens_obs_noise,
+                                    densv2_obs,densv2_obs_noise,
+                                    prior,mu,w_init,
+                                    h_m2m=h_m2m,kernel=kernel,
+                                    delta_m2m=None,deltav2_m2m=None)
         fcw*= eps*w_out
         if runasy:
             # Transform derivatives to derivatives in y
@@ -370,6 +389,7 @@ def estimate_hessian_m2m(w_out,z_init,vz_init,
             out+= prior_shape(force_of_change_dirichlet_weights_deriv(\
                     w_out,zsun_m2m,z_m2m,vz_m2m,mu,w_prior))
     return 0.5*(out+out.T)/nstep # numerical inaccuracy
+
 
 ### zsun force of change
 
