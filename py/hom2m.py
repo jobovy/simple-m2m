@@ -109,7 +109,8 @@ def force_of_change_densv2_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
     Wij= numpy.zeros((len(z_obs),len(z_m2m)))
     for jj,zo in enumerate(z_obs):
         Wij[jj]= kernel(numpy.fabs(zo-z_m2m+zsun_m2m),h_m2m)
-        deltav2_m2m_new[jj]= (numpy.sum(w_m2m*Wij[jj]*vz_m2m**2.)-densv2_obs[jj])/densv2_obs_noise[jj]
+        deltav2_m2m_new[jj]= (numpy.sum(w_m2m*Wij[jj]*vz_m2m**2.)
+                              -densv2_obs[jj])/densv2_obs_noise[jj]
     if deltav2_m2m is None: deltav2_m2m= deltav2_m2m_new
     return (-numpy.sum(numpy.tile(deltav2_m2m/densv2_obs_noise,
                                   (len(z_m2m),1)).T*Wij,axis=0)*vz_m2m**2.,
@@ -371,25 +372,158 @@ def estimate_hessian_m2m(w_out,z_init,vz_init,
         # Evaluate second derivatives
         out+= force_of_change_density_weights_deriv(\
             w_out,zsun_m2m,z_m2m,vz_m2m,
-            mu,w_prior,
             z_obs,dens_obs,dens_obs_noise,
             h_m2m,kernel=kernel,diag=diag)
         # Add velocity constraint if given
         if not densv2_obs is None:
             out+= force_of_change_densv2_weights_deriv(\
                 w_out,zsun_m2m,z_m2m,vz_m2m,
-                mu,w_prior,
                 z_obs,densv2_obs,densv2_obs_noise,
                 h_m2m,kernel=kernel,diag=diag)
         # Add prior
         if prior.lower() == 'entropy':
             out+= prior_shape(force_of_change_entropy_weights_deriv(\
-                    w_out,zsun_m2m,z_m2m,vz_m2m,mu,w_prior))
+                    w_out,mu,w_prior))
         else:
             out+= prior_shape(force_of_change_dirichlet_weights_deriv(\
-                    w_out,zsun_m2m,z_m2m,vz_m2m,mu,w_prior))
+                    w_out,mu,w_prior))
     return 0.5*(out+out.T)/nstep # numerical inaccuracy
 
+def run_m2m_hmc(w_init,z_init,vz_init,
+                omega_m2m,zsun_m2m,
+                z_obs,dens_obs,dens_obs_noise,
+                densv2_obs=None,densv2_obs_noise=None,
+                mi=None,w_prior=None,
+                step=0.001,nstep=1000,nleap=10,nobj=50,
+                eps=0.1,mu=1.,
+                h_m2m=0.02,kernel=epanechnikov_kernel,
+                prior='entropy'):
+    """
+    NAME:
+       run_m2m_hmc
+    PURPOSE:
+       Run M2M HMC on the harmonic-oscillator data
+    INPUT:
+       w_init - initial weights [N]
+       z_init - initial z [N]
+       vz_init - initial vz (rad) [N]
+       omega_m2m - potential parameter omega
+       zsun_m2m - Sun's height above the plane [N]
+       z_obs - heights at which the density observations are made
+       dens_obs - observed densities
+       dens_obs_noise - noise in the observed densities
+       densv2_obs= (None) observed density x velocity-squareds (optional)
+       densv2_obs_noise= (None) noise in the observed densities x velocity-squareds
+       mi= (None) masses for the HMC algorithm
+       w_prior= (None) prior weights
+       step= stepsize of orbit integration
+       nstep= sets integration time: number of orbit steps = nstep x nleap, st nstep = nsamples
+       nleap= number of orbit steps between momentum resamplings
+       nobj= number of orbit steps to use to average the objective function
+       eps= M2M epsilon parameter
+       mu= M2M entropy parameter mu
+       h_m2m= kernel size parameter for computing the observables
+       kernel= a smoothing kernel
+       prior= ('entropy' or 'dirichlet')
+    OUTPUT:
+       (w_out,Q_out,[wevol,rndindx]) - (output weights [N],objective function as a function of time,
+                                       [weight evolution for randomly selected weights,index of random weights])
+    HISTORY:
+       2016-02-27 - Written - Bovy (UofT/CCA)
+    """
+    w_out= numpy.empty((nstep,len(w_init)))
+    if mi is None: mi= numpy.ones_like(w_init)
+    sqmi= numpy.sqrt(mi)
+    if w_prior is None: w_prior= numpy.ones_like(w_init)/float(len(w_init))
+    Q_out= []
+    A_init, phi_init= zvz_to_Aphi(z_init,vz_init,omega_m2m)
+    phi_now= phi_init
+    # Compute initial force of change and initial objective function
+    w_cur= copy.deepcopy(w_init)
+    Vb4= 0.
+    fcw= 0.
+    for kk in range(nobj):
+        phi_now+= omega_m2m*step
+        z_m2m= z_init#A_init*numpy.cos(phi_now)
+        vz_m2m= vz_init#-A_init*omega_m2m*numpy.sin(phi_now)
+        fcwt, delta_m2m, deltav2_m2m= \
+            force_of_change_weights(w_cur,zsun_m2m,z_m2m,vz_m2m,
+                                    z_obs,dens_obs,dens_obs_noise,
+                                    densv2_obs,densv2_obs_noise,
+                                    prior,mu,w_init,
+                                    h_m2m=h_m2m,kernel=kernel)
+        # Compute potential energy
+        if densv2_obs is None:
+            deltav2_m2m= 0.
+        Vb4+= 0.5*numpy.sum(delta_m2m**2.+deltav2_m2m**2.)
+        fcw+= fcwt
+    Vb4/= nobj
+    fcw/= nobj
+    if prior.lower() == 'entropy':
+        Vb4+= +mu*numpy.sum(w_cur*numpy.log(w_cur/w_prior))
+    else:
+        Vb4+= -mu*numpy.sum(w_prior*numpy.log(w_cur))
+    naccept= 0.
+    for ii in range(nstep):
+        # Sample momentum
+        pw= numpy.random.normal(size=len(w_init))*sqmi
+        # Compute Hamiltonian
+        Hb4= 0.5*numpy.sum(pw**2./mi)+Vb4
+        new_w= copy.deepcopy(w_cur)
+        # Perform leapfrog integration
+        pwi= copy.deepcopy(pw)
+        pw+= step/2.*eps*fcw # half a step to get started
+        for jj in range(1,nleap+1):
+            new_w+= step*eps*pw/mi
+            pw[new_w<0.]*= -1. # bounce
+            new_w[new_w<0]*= -1.
+#            phi_now+= omega_m2m*step
+#            z_m2m= A_init*numpy.cos(phi_now)
+#            vz_m2m= -A_init*omega_m2m*numpy.sin(phi_now)
+            new_grad, delta_m2m, deltav2_m2m=\
+                force_of_change_weights(new_w,zsun_m2m,z_m2m,vz_m2m,
+                                        z_obs,dens_obs,dens_obs_noise,
+                                        densv2_obs,densv2_obs_noise,
+                                        prior,mu,w_init,
+                                        h_m2m=h_m2m,kernel=kernel)
+            pw+= step*eps*new_grad/(1.+ (jj == nleap)) #Full steps, excl. last
+        # Compute Hamiltonian after leapfrogging
+        V= 0.
+        new_grad= 0.
+        for kk in range(nobj):
+            phi_now+= omega_m2m*step
+            z_m2m= z_init#A_init*numpy.cos(phi_now)
+            vz_m2m= vz_init#-A_init*omega_m2m*numpy.sin(phi_now)
+            new_gradt, delta_m2m, deltav2_m2m=\
+                force_of_change_weights(new_w,zsun_m2m,z_m2m,vz_m2m,
+                                        z_obs,dens_obs,dens_obs_noise,
+                                        densv2_obs,densv2_obs_noise,
+                                        prior,mu,w_init,
+                                        h_m2m=h_m2m,kernel=kernel)
+            # Compute potential energy
+            if densv2_obs is None:
+                deltav2_m2m= 0.
+            V+= 0.5*numpy.sum(delta_m2m**2.+deltav2_m2m**2.)
+            new_grad+= new_gradt
+        V/= nobj
+        new_grad/= nobj
+        if prior.lower() == 'entropy':
+            V+= +mu*numpy.sum(new_w*numpy.log(new_w/w_prior))
+        else:
+            V+= -mu*numpy.sum(w_prior*numpy.log(new_w))
+        H= 0.5*numpy.sum(pw**2./mi)+V
+        dH= H-Hb4
+        #print(dH,V-Vb4,0.5*numpy.sum((pw**2.-pwi**2.)/mi),V)
+        dH= dH * ( dH > 0 )
+        #Metropolis accept
+        if numpy.random.uniform() < numpy.exp(-dH):
+            w_cur= copy.deepcopy(new_w)
+            Vb4= V
+            fcw= new_grad
+            naccept+= 1.
+        w_out[ii]= w_cur
+        Q_out.append(Vb4)
+    return (w_out,naccept,Q_out)
 
 ### zsun force of change
 
