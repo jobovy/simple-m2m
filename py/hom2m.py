@@ -211,10 +211,9 @@ def run_m2m(w_init,z_init,vz_init,
             z_obs,dens_obs,dens_obs_noise,
             densv2_obs=None,densv2_obs_noise=None,
             step=0.001,nstep=1000,
-            eps=0.1,mu=1.,
-            h_m2m=0.02,kernel=epanechnikov_kernel,
-            smooth=None,prior='entropy',
-            runasy=False,
+            eps=0.1,mu=1.,prior='entropy',
+            kernel=epanechnikov_kernel,h_m2m=0.02,
+            smooth=None,st96smooth=False,
             output_wevolution=False):
     """
     NAME:
@@ -236,11 +235,11 @@ def run_m2m(w_init,z_init,vz_init,
        nstep= number of steps to integrate the orbits for
        eps= M2M epsilon parameter
        mu= M2M entropy parameter mu
-       h_m2m= kernel size parameter for computing the observables
-       kernel= a smoothing kernel
        prior= ('entropy' or 'dirichlet')
+       kernel= a smoothing kernel
+       h_m2m= kernel size parameter for computing the observables
        smooth= smoothing parameter alpha (None for no smoothing)
-       runasy= (False) rather than updating the weights, update the weights transformed to y (this exactly conserves the sum of the weights)
+       st96smooth= (False) if True, smooth the constraints (Syer & Tremaine 1996), if False, smooth the objective function and its derivative (Dehnen 2000)
        output_wevolution= if set to an integer, return the time evolution of this many randomly selected weights
     OUTPUT:
        (w_out,Q_out,[wevol,rndindx]) - (output weights [N],objective function as a function of time,
@@ -250,64 +249,86 @@ def run_m2m(w_init,z_init,vz_init,
        2016-12-08 - Added output_wevolution - Bovy (UofT/CCA)
        2016-12-16 - Added explicit noise in the observed densities - Bovy (UofT/CCA)
        2017-02-22 - Refactored to more general function - Bovy (UofT/CCA)
+       2017-02-27 - Add st96smooth option and make Dehnen smoothing the default - Bovy (UofT/CCA)
     """
-    #w_init= w_init/numpy.sum(w_init) # make sure that they are normalized
     w_out= copy.deepcopy(w_init)
     Q_out= []
     A_init, phi_init= zvz_to_Aphi(z_init,vz_init,omega_m2m)
-    if runasy:
-        y_out= simplex.simplex_to_Rn(w_out)
     if output_wevolution:
         rndindx= numpy.random.permutation(len(w_out))[:output_wevolution]
         wevol= numpy.zeros((output_wevolution,nstep))
+    # Compute force of change for first iteration
+    fcw, delta_m2m_new, deltav2_m2m_new= \
+        force_of_change_weights(w_init,zsun_m2m,z_init,vz_init,
+                                z_obs,dens_obs,dens_obs_noise,
+                                densv2_obs,densv2_obs_noise,
+                                prior,mu,w_init,
+                                h_m2m=h_m2m,kernel=kernel)
+    fcw*= w_init
     if not smooth is None:
-        # Smooth the constraints
-        dens_init= compute_dens(z_init,zsun_m2m,z_obs,h_m2mw=w_init)
-        delta_m2m= (dens_init-dens_obs)/dens_obs_noise
-        densv2_init= compute_densv2(z_init,vz_init,zsun_m2m,z_obs,w=w_init)
-        deltav2_m2m= (densv2_init-densv2_obs)/densv2_obs_noise
+        delta_m2m= delta_m2m_new
+        deltav2_m2m= deltav2_m2m_new
     else:
         delta_m2m= None
         deltav2_m2m= None
-    for ii in range(nstep):
-        # Compute current (z,vz)
-        phi_now= omega_m2m*ii*step+phi_init
-        z_m2m= A_init*numpy.cos(phi_now)
-        vz_m2m= -A_init*omega_m2m*numpy.sin(phi_now) # unnecessary
-        # Compute force of change
-        fcw, delta_m2m_new, deltav2_m2m_new= \
-            force_of_change_weights(w_out,zsun_m2m,z_m2m,vz_m2m,
-                                    z_obs,dens_obs,dens_obs_noise,
-                                    densv2_obs,densv2_obs_noise,
-                                    prior,mu,w_init,
-                                    h_m2m=h_m2m,kernel=kernel,
-                                    delta_m2m=None,deltav2_m2m=None)
-        fcw*= eps*w_out
-        if runasy:
-            # Transform derivatives to derivatives in y
-            fcw= simplex.simplex_to_Rn_derivs_fast(y_out,fcw/w_out/eps,
-                                                   add_dlogdet=False)
-            y_out+= step*eps*fcw
-            w_out= simplex.Rn_to_simplex(y_out)
+    if not smooth is None and not st96smooth:
+        if not densv2_obs is None:
+            Q= numpy.hstack((delta_m2m**2.,deltav2_m2m**2.))
         else:
-            w_out+= step*fcw
-            w_out[w_out < 0.]= 10.**-16.
-            #w_out/= numpy.sum(w_out)
-        if not smooth is None:
+            Q= delta_m2m**2.
+    for ii in range(nstep):
+        # Update weights first
+        w_out+= eps*step*fcw
+        w_out[w_out < 0.]= 10.**-16.
+        # (Store objective function)
+        if not smooth is None and st96smooth:
             if not densv2_obs is None:
                 Q_out.append(numpy.hstack((delta_m2m**2.,deltav2_m2m**2.)))
             else:
                 Q_out.append(delta_m2m**2.)
+        elif not smooth is None:
+            Q_out.append(copy.deepcopy(Q))
         else:
             if not densv2_obs is None:
                 Q_out.append(numpy.hstack((delta_m2m_new**2.,
                                            deltav2_m2m_new**2.)))
             else:
                 Q_out.append(delta_m2m_new**2.)
+        # Then update force
+        phi_now= omega_m2m*ii*step+phi_init
+        z_m2m= A_init*numpy.cos(phi_now)
+        vz_m2m= -A_init*omega_m2m*numpy.sin(phi_now)
+        # Compute force of change
+        if smooth is None or not st96smooth:
+            # Turn these off
+            tdelta_m2m= None
+            tdeltav2_m2m= None
+        else:
+            tdelta_m2m= delta_m2m
+            tdeltav2_m2m= deltav2_m2m
+        fcw_new, delta_m2m_new, deltav2_m2m_new= \
+            force_of_change_weights(w_out,zsun_m2m,z_m2m,vz_m2m,
+                                    z_obs,dens_obs,dens_obs_noise,
+                                    densv2_obs,densv2_obs_noise,
+                                    prior,mu,w_init,
+                                    h_m2m=h_m2m,kernel=kernel,
+                                    delta_m2m=tdelta_m2m,
+                                    deltav2_m2m=tdeltav2_m2m)
+        fcw_new*= w_out
         # Increment smoothing
-        if not smooth is None:
+        if not smooth is None and st96smooth:
             delta_m2m+= step*smooth*(delta_m2m_new-delta_m2m)
             deltav2_m2m+= step*smooth*(deltav2_m2m_new-deltav2_m2m)
+            fcw= fcw_new
+        elif not smooth is None:
+            if not densv2_obs is None:
+                Q_new= numpy.hstack((delta_m2m_new**2.,deltav2_m2m_new**2.))
+            else:
+                Q_new= delta_m2m_new**2.
+            Q+= step*smooth*(Q_new-Q)
+            fcw+= step*smooth*(fcw_new-fcw)
+        else:
+            fcw= fcw_new
         # Record random weights if requested
         if output_wevolution:
             wevol[:,ii]= w_out[rndindx]
