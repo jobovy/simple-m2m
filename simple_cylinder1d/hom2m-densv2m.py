@@ -26,7 +26,7 @@ numpy.random.seed(4)
 # We only observe the density at a few z
 # z_obs= numpy.array([0.075,0.1,0.125,0.15,0.175,0.2,-0.075,-0.1,-0.125,-0.15,-0.175,-0.2])
 z_obs= numpy.array([0.075,0.1,0.125,0.15,0.175,-0.075,-0.1,-0.125,-0.15,-0.175])
-h_obs= 0.1
+h_obs= 0.05
 h_m2m= h_obs
 
 # print input parameters
@@ -308,3 +308,93 @@ plt.axhline(zsun_guess,color=sns.color_palette()[1],lw=2.,zorder=0)
 print("Zsun: fit, starting point",zsun_out[-1],zsun_m2m)
 plt.show()
 
+### run M2M with variable omega using zsun_m2m
+# estimated zsun from above
+zsun_obs=zsun_out[-1]
+print 'zsun_obs set =',zsun_obs
+n_m2m= 1000
+omega_m2m= omega_true-0.5
+sigma_init= 0.2
+E_m2m= numpy.random.exponential(scale=sigma_init**2.,size=n_m2m)
+phi_m2m_omega= numpy.random.uniform(size=n_m2m)*2.*numpy.pi
+A_m2m_omega= numpy.sqrt(2.*E_m2m)/omega_m2m
+w_init= numpy.ones(n_m2m)
+z_m2m= A_m2m_omega*numpy.cos(phi_m2m_omega)
+z_out= numpy.linspace(-0.3,0.3,101)
+dens_init= compute_dens(z_m2m,zsun_obs,z_out,h_m2m,w_init)
+vz_m2m= -omega_m2m*A_m2m_omega*numpy.sin(phi_m2m_omega)
+v2m_init= compute_v2m(z_m2m,vz_m2m,zsun_obs,z_out,h_m2m,w_init)
+
+step= numpy.pi/3.*10.**-2.
+step=numpy.pi/20.0
+nstep= 10000
+eps= 10.**-4.
+eps_vel= eps*n_m2m
+eps_omega= eps*1.
+skipomega= 40
+mu= 1.0
+h_m2m= 0.1
+zsun_m2m=zsun_guess
+opt_w_first= True
+if opt_w_first:
+    w_out,Q= run_m2m_weights_wv2m(w_init,A_m2m_omega,phi_m2m_omega,omega_m2m,zsun_m2m,
+                                 z_obs,dens_obs,dens_obs_noise,v2m_obs,v2m_obs_noise,
+                                 nstep=numpy.amin([nstep,10000]),
+                                 step=step,mu=mu,eps=eps,eps_vel=eps_vel,
+                                 h_m2m=h_m2m)
+else:
+    w_out= w_init
+if True:
+    (w_out,omega_out,z_m2m,vz_m2m),Q= run_m2m_weights_omega_densv2m(w_out,A_m2m_omega,phi_m2m_omega,omega_m2m,zsun_m2m,
+                                                        z_obs,dens_obs,dens_obs_noise,v2m_obs,v2m_obs_noise,
+                                                        nstep=nstep,step=step,mu=mu,skipomega=skipomega,
+                                                        eps=eps,eps_vel=eps_vel,h_m2m=h_m2m,
+                                                        eps_omega=eps_omega)
+
+z_out= numpy.linspace(-0.3,0.3,101)
+dens_final= compute_dens(z_m2m,zsun_obs,z_out,h_obs,w_out)
+bovy_plot.bovy_print(axes_labelsize=17.,text_fontsize=12.,xtick_labelsize=15.,ytick_labelsize=15.)
+figsize(15,6)
+subplot(2,3,1)
+bovy_plot.bovy_plot(z_out,dens_init,'-',semilogy=True,
+                   xlabel=r'$\tilde{z}$',ylabel=r'$\nu_{\mathrm{obs}}(\tilde{z})$',
+                   xrange=[-.25,0.25],yrange=[0.003,30.],gcf=True)
+bovy_plot.bovy_plot(z_obs,dens_obs,'o',semilogy=True,overplot=True)
+bovy_plot.bovy_plot(z_out,dens_final,'-',semilogy=True,overplot=True,zorder=0)
+errorbar(z_obs,dens_obs,yerr=dens_obs_noise,marker='None',ls='none',color=sns.color_palette()[1])
+yscale('log',nonposy='clip')
+subplot(2,3,2)
+v2m_final= compute_v2m(z_m2m,vz_m2m,zsun_obs,z_out,h_obs,w_out)
+bovy_plot.bovy_plot(z_out,v2m_init,'-',semilogy=True,
+                   xlabel=r'$\tilde{z}$',ylabel=r'$\langle v^2\rangle$',
+                   xrange=[-.25,0.25],yrange=[0.0001,.3],gcf=True)
+bovy_plot.bovy_plot(z_obs,v2m_obs,'o',semilogy=True,overplot=True)
+bovy_plot.bovy_plot(z_out,v2m_final,'-',semilogy=True,overplot=True,zorder=0)
+errorbar(z_obs,v2m_obs,yerr=v2m_obs_noise,marker='None',ls='none',color=sns.color_palette()[1])
+yscale('log',nonposy='clip')
+subplot(2,3,3)
+bovy_plot.bovy_plot(numpy.linspace(0.,1.,nstep)*nstep*step*numpy.mean(omega_true)/2./numpy.pi,omega_out,'-',
+                   xlabel=r'$\mathrm{orbits}$',ylabel=r'$\omega(t)$',gcf=True,semilogx=True,zorder=1,
+                   yrange=[omega_m2m/1.3,numpy.amax(omega_out)*1.2])
+axhline(omega_true,color=sns.color_palette()[1],lw=2.,zorder=0)
+ylim(0.7,1.7)
+subplot(2,3,4)
+bovy_plot.bovy_plot(A_m2m_omega,w_out,'k.',xlabel=r'$z_{\mathrm{max}}$',ylabel=r'$w(z_{\mathrm{max}})$',
+                   yrange=[0.,5.],gcf=True)
+sindx= numpy.argsort(A_m2m_omega)
+w_expect= numpy.exp((A_m2m_omega[sindx]*omega_true)**2./2.*(1./sigma_init**2.-1./sigma_true**2.))
+w_expect/= numpy.sum(w_expect)/len(w_expect)
+plot(A_m2m_omega[sindx],w_expect,lw=2.)
+subplot(2,3,5)
+bovy_plot.bovy_plot(numpy.linspace(0.,1.,nstep)*nstep*step*omega_true/2./numpy.pi,numpy.sum(Q,axis=1),lw=1.,
+                   semilogx=True,xlabel=r'$\mathrm{orbits}$',ylabel=r'$F$',gcf=True)
+subplot(2,3,6)
+_= hist(vz_m2m,weights=w_out,histtype='step',lw=2.,normed=True,bins=31,zorder=1)
+_= hist(vz_mock,histtype='step',lw=2.,normed=True,bins=31,zorder=2)
+_= hist(vz_m2m,histtype='step',lw=2.,normed=True,bins=31,ls='--',zorder=0)
+xlabel(r'$v_z$')
+ylabel(r'$p(v_z)$')
+print("Velocity dispersions: mock, fit",numpy.std(vz_mock),\
+      numpy.sqrt(numpy.sum(w_out*(vz_m2m-numpy.sum(w_out*vz_m2m)/numpy.sum(w_out))**2.)/numpy.sum(w_out)))
+tight_layout()
+print("omega: fit, starting point",numpy.median(omega_out[-1000:-1]),omega_m2m)

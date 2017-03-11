@@ -2,8 +2,12 @@
 
 ### run hom2m using the output of simple 1D selection. 
 
+hom2m-omega-densv2m.py
+ use zsun and wsun input, and calculate omega
+
 hom2m-densv2m.py
  use both density and velocity information
+ omega section is not work. 
 
 hom2m_simple1d.py
  only use density information 

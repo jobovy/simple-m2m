@@ -2,6 +2,7 @@
 import math
 import numpy
 import copy
+import sys
 
 # define kernel
 def sph_kernel(r,h):
@@ -415,8 +416,8 @@ def force_of_change_weights_v2m(w_m2m,zsun_m2m,z_m2m,vz_m2m,
         deltav2m_m2m_new[jj]= (wv2m_m2m[jj]/dens_m2m[jj]-v2m_obs[jj])/v2m_obs_noise[jj]
     if deltav2m_m2m is None: deltav2m_m2m= deltav2m_m2m_new
     if numpy.any(dens_m2m==0.0)==True:
-        print ' dens_m2m has zero. dens_m2m==0 ',np.where(dens_m2m==0)
-        print ' zsun= ',len(zsun_m2m),zsun_m2m
+        print ' dens_m2m has zero. dens_m2m==0 ',numpy.where(dens_m2m==0)
+        print ' zsun= ',zsun_m2m
         sys.exit()
     return (-eps*w_m2m*(numpy.sum(numpy.tile(deltav2m_m2m/(dens_m2m*v2m_obs_noise),(len(z_m2m),1)).T*(Wij),axis=0) 
         *(vz_m2m**2.)-numpy.sum(numpy.tile(
@@ -693,17 +694,17 @@ def force_of_change_omega_densv2m(w_m2m,zsun_m2m,omega_m2m,
                           delta_m2m=None,deltav2m_m2m=None):
     # Compute the force of change by directly finite difference of the objective function
     # REAL HACK FOLLOWS!
-    fcw, delta_m2m_do= force_of_change_weights(w_out,zsun_m2m,
+    fcw, delta_m2m_do= force_of_change_weights(w_m2m,zsun_m2m,
                                                z_m2m+zdiff(z_prev,vz_prev,omega_m2m,omega_m2m+delta_omega,step),
                                                vz_m2m+vzdiff(z_prev,vz_prev,omega_m2m,omega_m2m+delta_omega,step),
-                                               eps,mu,w_init,
+                                               eps,mu,w_prior,
                                                z_obs,dens_obs,dens_obs_noise,
                                                h_m2m=h_m2m,
                                                delta_m2m=None)
-    fcwv2, deltav2m_m2m_do= force_of_change_weights_v2m(w_out,zsun_m2m,
+    fcwv2, deltav2m_m2m_do= force_of_change_weights_v2m(w_m2m,zsun_m2m,
                                                       z_m2m+zdiff(z_prev,vz_prev,omega_m2m,omega_m2m+delta_omega,step),
                                                       vz_m2m+vzdiff(z_prev,vz_prev,omega_m2m,omega_m2m+delta_omega,step),
-                                                      eps_vel,mu,w_init,
+                                                      eps_vel,mu,w_prior,
                                                       z_obs,v2m_obs,v2m_obs_noise,
                                                       h_m2m=h_m2m,
                                                       deltav2m_m2m=None)
