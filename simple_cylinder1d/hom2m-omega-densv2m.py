@@ -26,7 +26,7 @@ numpy.random.seed(4)
 # We only observe the density at a few z
 # z_obs= numpy.array([0.075,0.1,0.125,0.15,0.175,0.2,-0.075,-0.1,-0.125,-0.15,-0.175,-0.2])
 z_obs= numpy.array([0.075,0.1,0.125,0.15,0.175,-0.075,-0.1,-0.125,-0.15,-0.175])
-h_obs= 0.05
+h_obs= 0.1
 h_m2m= h_obs
 
 # print input parameters
@@ -60,6 +60,14 @@ def compute_nsbin(z,zsun,z_obs,h_obs,w=None):
     for jj,zo in enumerate(z_obs):
        nsbin[jj]+= numpy.sum(w[numpy.fabs(zo-z+zsun)<1.0*h_obs])
     return nsbin
+# compute <v>
+def compute_vm(z,vz,zsun,z_obs,h_obs,w=None):
+    if w is None: w= numpy.ones_like(z)
+    vm= numpy.zeros_like(z_obs)
+    for jj,zo in enumerate(z_obs):
+        vm[jj]= numpy.sum(w*kernel(numpy.fabs(zo-z+zsun),h_obs)*vz) \
+          /numpy.sum(w*kernel(numpy.fabs(zo-z+zsun),h_obs))
+    return vm
 # poisson error
 nsbin_obs=compute_nsbin(z_mock,zoff_obs,z_obs,h_obs)
 print ' Ns bin for density=',nsbin_obs
@@ -100,32 +108,33 @@ print ' Vzsun assumed=',vzsun
 # relative to sun
 vz_vmock=vz_vmock+vzsun
 v2m_obs= compute_v2m(z_vmock,vz_vmock,zoff_obs,z_obs,h_obs)
+vm_obs= compute_vm(z_vmock,vz_vmock,zoff_obs,z_obs,h_obs)
 nsbin_obs=compute_nsbin(z_vmock,zoff_obs,z_obs,h_obs)
 print ' Ns bin for <v^2>=',nsbin_obs
-v2m_obs_noise= v2m_obs/numpy.sqrt(nsbin_obs)
 print ' <v^2> =',v2m_obs
+print ' <v> =',vm_obs
+# set v2m as sig_z^2
+v2m_obs=(v2m_obs-vm_obs**2)
+print ' new <v^2> = sigz^2 =',v2m_obs
+# noise = (sig_z/sqrt(np))^2
+v2m_obs_noise= v2m_obs/numpy.sqrt(nsbin_obs)
 print ' v^2 errors=',v2m_obs_noise
-vmean=numpy.zeros_like(z_obs)
-for jj,zo in enumerate(z_obs):
-    vmean[jj]= numpy.sum(kernel(numpy.fabs(zo-z_vmock+zoff_obs),h_obs)*vz_vmock) \
-         /numpy.sum(kernel(numpy.fabs(zo-z_vmock+zoff_obs),h_obs))
-print ' <v>bin =',vmean
 
 ### initial model
 
 # estimated zsun from above
 # zsun_obs=zsun_out[-1]
-zsun_obs=0.0147
+zsun_obs=0.017
 print 'zsun_obs set =',zsun_obs
 
-n_m2m= 1000
+n_m2m= 4000
 # assume velocity km/s, distance kpc unit 
 sigma_init= 15.0
 # although it is guess
 # scale with 220 km/s and 8 kpc
 sigma_true=15.0
 # omega = sqrt(2)x(v (km/s))/z (kpc)
-omega_true= 1.4*15.0/0.2
+omega_true= 1.4*15.0/0.2-10.0
 omega_m2m=omega_true
 E_m2m= numpy.random.exponential(scale=sigma_init**2.,size=n_m2m)
 phi_m2m_omega= numpy.random.uniform(size=n_m2m)*2.*numpy.pi
@@ -165,13 +174,12 @@ step=numpy.pi/20.0
 nstep= 10000
 eps= 10.**-4
 eps_vel= eps*n_m2m
-eps_omega= eps*40000.
+eps_omega= eps*100.0
 skipomega= 40
-mu= 0.0
+mu= 1.0
 h_m2m= h_obs
 zsun_m2m=zsun_obs
-# opt_w_first= True
-opt_w_first= False
+opt_w_first= True
 if opt_w_first:
     w_out,Q= run_m2m_weights_wv2m(w_init,A_m2m_omega,phi_m2m_omega,omega_m2m,zsun_m2m,
                                  z_obs,dens_obs,dens_obs_noise,v2m_obs,v2m_obs_noise,
@@ -181,11 +189,13 @@ if opt_w_first:
 else:
     w_out= w_init
 if True:
-    (w_out,omega_out,z_m2m,vz_m2m),Q= run_m2m_weights_omega_densv2m(w_out,A_m2m_omega,phi_m2m_omega,omega_m2m,zsun_m2m,
-                                                        z_obs,dens_obs,dens_obs_noise,v2m_obs,v2m_obs_noise,
-                                                        nstep=nstep,step=step,mu=mu,skipomega=skipomega,
-                                                        eps=eps,eps_vel=eps_vel,h_m2m=h_m2m,
-                                                        eps_omega=eps_omega)
+# delta_omega set to be 0.3 x omega_true
+    (w_out,omega_out,z_m2m,vz_m2m),Q= \
+     run_m2m_weights_omega_densv2m(w_out,A_m2m_omega,phi_m2m_omega, \
+       omega_m2m,zsun_m2m,z_obs,dens_obs,dens_obs_noise,v2m_obs,v2m_obs_noise, \
+       nstep=nstep,step=step,mu=mu,skipomega=skipomega, \
+       eps=eps,eps_vel=eps_vel,h_m2m=h_m2m,eps_omega=eps_omega, \
+       delta_omega=omega_true*0.3)
 
 z_out= numpy.linspace(-0.3,0.3,101)
 dens_final= compute_dens(z_m2m,zsun_obs,z_out,h_obs,w_out)
