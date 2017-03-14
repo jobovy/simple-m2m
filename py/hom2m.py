@@ -89,6 +89,89 @@ def prior_gamma(w_m2m,mu,w_prior):
 def sample_gamma(mu,w_prior,n=1.):
     return numpy.random.gamma(mu*w_prior+1.,1./mu,size=n)
 
+############################### M2M FORCE-OF-CHANGE ###########################
+# All defined here as the straight d constraint / d parameter (i.e., does *not*
+# include things like eps, weight)
+
+# Due to the prior
+def force_of_change_entropy_weights(w_m2m,mu,w_prior):
+    return -mu*numpy.log(w_m2m/w_prior)
+
+def force_of_change_gamma_weights(w_m2m,mu,w_prior):
+    return mu*(w_prior/w_m2m-1.)
+
+#Due to the density
+#For the weights
+def force_of_change_density_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
+                                    z_obs,dens_obs,dens_obs_noise,
+                                    h_m2m=0.02,kernel=epanechnikov_kernel,
+                                    delta_m2m=None):
+    """Computes the force of change for all of the weights"""
+    delta_m2m_new= numpy.zeros_like(z_obs)
+    Wij= numpy.zeros((len(z_obs),len(z_m2m)))
+    for jj,zo in enumerate(z_obs):
+        Wij[jj]= kernel(numpy.fabs(zo-z_m2m+zsun_m2m),h_m2m)
+        delta_m2m_new[jj]= (numpy.sum(w_m2m*Wij[jj])-dens_obs[jj])/dens_obs_noise[jj]
+    if delta_m2m is None: delta_m2m= delta_m2m_new
+    return (-numpy.sum(numpy.tile(delta_m2m/dens_obs_noise,(len(z_m2m),1)).T
+                       *Wij,axis=0),
+             delta_m2m_new)
+
+# Due to the velocity
+# For the weights
+def force_of_change_densv2_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
+                                   z_obs,densv2_obs,densv2_obs_noise,
+                                   h_m2m,kernel=epanechnikov_kernel,
+                                   deltav2_m2m=None):
+    """Computes the force of change for all of the weights due to the velocity constraint"""
+    deltav2_m2m_new= numpy.zeros_like(z_obs)
+    Wij= numpy.zeros((len(z_obs),len(z_m2m)))
+    for jj,zo in enumerate(z_obs):
+        Wij[jj]= kernel(numpy.fabs(zo-z_m2m+zsun_m2m),h_m2m)
+        deltav2_m2m_new[jj]= (numpy.sum(w_m2m*Wij[jj]*vz_m2m**2.)
+                              -densv2_obs[jj])/densv2_obs_noise[jj]
+    if deltav2_m2m is None: deltav2_m2m= deltav2_m2m_new
+    return (-numpy.sum(numpy.tile(deltav2_m2m/densv2_obs_noise,
+                                  (len(z_m2m),1)).T*Wij,axis=0)*vz_m2m**2.,
+             deltav2_m2m_new)
+
+# Short-cuts
+def force_of_change_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
+                            z_obs,dens_obs,dens_obs_noise,
+                            densv2_obs,densv2_obs_noise,
+                            prior,mu,w_prior,
+                            h_m2m=0.02,kernel=epanechnikov_kernel,
+                            delta_m2m=None,deltav2_m2m=None):
+    """Computes the force of change for all of the weights"""
+    fcw, delta_m2m_new=\
+        force_of_change_density_weights(w_m2m,zsun_m2m,
+                                        z_m2m,vz_m2m,
+                                        z_obs,
+                                        dens_obs,dens_obs_noise,
+                                        h_m2m=h_m2m,kernel=kernel,
+                                        delta_m2m=delta_m2m)
+    # Add velocity constraint if given
+    if not densv2_obs is None:
+        fcwv2, deltav2_m2m_new= \
+            force_of_change_densv2_weights(w_m2m,zsun_m2m,
+                                           z_m2m,vz_m2m,
+                                           z_obs,
+                                           densv2_obs,densv2_obs_noise,
+                                           h_m2m=h_m2m,
+                                           kernel=kernel,
+                                           deltav2_m2m=deltav2_m2m)
+    else:
+        fcwv2= 0.
+        deltav2_m2m_new= 0.
+    fcw+= fcwv2
+    # Add prior
+    if prior.lower() == 'entropy':
+        fcw+= force_of_change_entropy_weights(w_m2m,mu,w_prior)
+    else:
+        fcw+= force_of_change_gamma_weights(w_m2m,mu,w_prior)
+    return (fcw,delta_m2m_new,deltav2_m2m_new)
+
+
 ### M2M force of change definitions
 
 def force_of_change_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
