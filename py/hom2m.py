@@ -1,9 +1,24 @@
-
-import math
+# hom2m.py: Simple Harmonic-Oscillator M2M implementation
 import numpy
 import copy
+from scipy import interpolate, integrate
 
-# define kernel
+######################### COORDINATE TRANSFORMATIONS ##########################
+def zvz_to_Aphi(z,vz,omega):
+    A= numpy.sqrt(z**2.+vz**2./omega**2.)
+    phi= numpy.arctan2(-vz/omega,z)
+    return (A,phi)
+def Aphi_to_zvz(A,phi,omega):
+    z= A*numpy.cos(phi)
+    vz= -A*omega*numpy.sin(phi)
+    return (z,vz)
+############################# ISOTHERMAL DF TOOLS #############################
+def sample_iso(sigma,omega,n=1):
+    E= numpy.random.exponential(scale=sigma**2.,size=n)
+    phi= numpy.random.uniform(size=n)*2.*numpy.pi
+    A= numpy.sqrt(2.*E)/omega
+    return Aphi_to_zvz(A,phi,omega)
+################################### KERNELS ###################################
 def sph_kernel(r,h):
     out= numpy.zeros_like(r)
     out[(r >= 0.)*(r <= h/2.)]= 1.-6.*(r[(r >= 0.)*(r <= h/2.)]/h)**2.+6.*(r[(r >= 0.)*(r <= h/2.)]/h)**3.
@@ -24,21 +39,55 @@ def epanechnikov_kernel_deriv(r,h):
     out= numpy.zeros_like(r)
     out[(r >= 0.)*(r <= h)]= -3./2.*r[(r >= 0.)*(r <= h)]/h**3.
     return out
-if True:
-    kernel= epanechnikov_kernel
-    kernel_deriv= epanechnikov_kernel_deriv
-else:
-    kernel= sph_kernel
-    kernel_deriv= sph_kernel_deriv
 
+################################### OBSERVATIONS ##############################
 ### compute density at z_obs
-
-def compute_dens(z,zsun,z_obs,h_obs,w=None):
-    if w is None: w= numpy.ones_like(z)
+def compute_dens(z,zsun,z_obs,h_obs,w=None,kernel=epanechnikov_kernel):
+    if w is None: w= numpy.ones_like(z)/float(len(z))
     dens= numpy.zeros_like(z_obs)
     for jj,zo in enumerate(z_obs):
-        dens[jj]= numpy.sum(w*kernel(numpy.fabs(zo-z+zsun),h_obs))/len(z)
+        dens[jj]= numpy.sum(w*kernel(numpy.fabs(zo-z+zsun),h_obs))
     return dens
+### compute_v2
+def compute_v2(z,vz,zsun,z_obs,h_obs,w=None,kernel=epanechnikov_kernel):
+    if w is None: w= numpy.ones_like(z)/float(len(z))
+    v2= numpy.zeros_like(z_obs)
+    for jj,zo in enumerate(z_obs):
+        v2[jj]= numpy.sum(w*kernel(numpy.fabs(zo-z+zsun),h_obs)*vz**2.)\
+            /numpy.sum(w*kernel(numpy.fabs(zo-z+zsun),h_obs))
+    return v2
+### compute_densv2
+def compute_densv2(z,vz,zsun,z_obs,h_obs,w=None,kernel=epanechnikov_kernel):
+    if w is None: w= numpy.ones_like(z)/float(len(z))
+    densv2= numpy.zeros_like(z_obs)
+    for jj,zo in enumerate(z_obs):
+        densv2[jj]= numpy.sum(w*kernel(numpy.fabs(zo-z+zsun),h_obs)*vz**2.)
+    return densv2
+
+################################### M2M PRIOR #################################
+def prior_entropy(w_m2m,mu,w_prior):
+    """Returns log prior for each weight individually"""
+    return -mu*w_m2m*(numpy.log(w_m2m/w_prior)-1.)
+def sample_entropy(mu,w_prior,n=1.):
+    # Compute CDF
+    ws= numpy.linspace(0.,10.*w_prior,1001)
+    cdf= numpy.array([\
+        integrate.quad(lambda x: (x/w_prior/numpy.exp(1.))**(-mu*x),0.,w)[0]
+        for w in ws])
+    cdf/= cdf[-1]
+    cdf[cdf > 1.]= 1.
+    ma_indx= (numpy.arange(len(ws))[cdf == 1.])[0]
+    print(ws[ma_indx])
+    ip= interpolate.InterpolatedUnivariateSpline(cdf[:ma_indx],ws[:ma_indx],
+                                                 k=3)
+    out= numpy.random.uniform(size=n)
+    return ip(out)
+
+def prior_gamma(w_m2m,mu,w_prior):
+    """Returns log prior for each weight individually"""
+    return mu*(w_prior*numpy.log(w_m2m)-w_m2m)
+def sample_gamma(mu,w_prior,n=1.):
+    return numpy.random.gamma(mu*w_prior+1.,1./mu,size=n)
 
 ### M2M force of change definitions
 
