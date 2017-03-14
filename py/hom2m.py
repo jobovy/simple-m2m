@@ -104,12 +104,17 @@ def force_of_change_gamma_weights(w_m2m,mu,w_prior):
 def force_of_change_density_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
                                     z_obs,dens_obs,dens_obs_noise,
                                     h_m2m=0.02,kernel=epanechnikov_kernel,
-                                    delta_m2m=None):
+                                    delta_m2m=None,Wij=None):
     """Computes the force of change for all of the weights"""
     delta_m2m_new= numpy.zeros_like(z_obs)
-    Wij= numpy.zeros((len(z_obs),len(z_m2m)))
+    if Wij is None:
+        Wij= numpy.zeros((len(z_obs),len(z_m2m)))
+        calc_Wij= True
+    else:
+        calc_Wij= False
     for jj,zo in enumerate(z_obs):
-        Wij[jj]= kernel(numpy.fabs(zo-z_m2m+zsun_m2m),h_m2m)
+        if calc_Wij:
+            Wij[jj]= kernel(numpy.fabs(zo-z_m2m+zsun_m2m),h_m2m)
         delta_m2m_new[jj]= (numpy.sum(w_m2m*Wij[jj])-dens_obs[jj])/dens_obs_noise[jj]
     if delta_m2m is None: delta_m2m= delta_m2m_new
     return (-numpy.sum(numpy.tile(delta_m2m/dens_obs_noise,(len(z_m2m),1)).T
@@ -121,17 +126,22 @@ def force_of_change_density_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
 def force_of_change_densv2_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
                                    z_obs,densv2_obs,densv2_obs_noise,
                                    h_m2m,kernel=epanechnikov_kernel,
-                                   deltav2_m2m=None):
+                                   deltav2_m2m=None,Wij=None):
     """Computes the force of change for all of the weights due to the velocity constraint"""
     deltav2_m2m_new= numpy.zeros_like(z_obs)
-    Wij= numpy.zeros((len(z_obs),len(z_m2m)))
+    if Wij is None:
+        Wij= numpy.zeros((len(z_obs),len(z_m2m)))
+        calc_Wij= True
+    else:
+        calc_Wij= False
     for jj,zo in enumerate(z_obs):
-        Wij[jj]= kernel(numpy.fabs(zo-z_m2m+zsun_m2m),h_m2m)
-        deltav2_m2m_new[jj]= (numpy.sum(w_m2m*Wij[jj]*vz_m2m**2.)
+        if calc_Wij:
+            Wij[jj]= kernel(numpy.fabs(zo-z_m2m+zsun_m2m),h_m2m)*vz_m2m**2.
+        deltav2_m2m_new[jj]= (numpy.sum(w_m2m*Wij[jj])
                               -densv2_obs[jj])/densv2_obs_noise[jj]
     if deltav2_m2m is None: deltav2_m2m= deltav2_m2m_new
     return (-numpy.sum(numpy.tile(deltav2_m2m/densv2_obs_noise,
-                                  (len(z_m2m),1)).T*Wij,axis=0)*vz_m2m**2.,
+                                  (len(z_m2m),1)).T*Wij,axis=0),
              deltav2_m2m_new)
 
 # Short-cuts
@@ -140,7 +150,8 @@ def force_of_change_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
                             densv2_obs,densv2_obs_noise,
                             prior,mu,w_prior,
                             h_m2m=0.02,kernel=epanechnikov_kernel,
-                            delta_m2m=None,deltav2_m2m=None):
+                            delta_m2m=None,deltav2_m2m=None,
+                            Wij=None,Wvz2ij=None):
     """Computes the force of change for all of the weights"""
     fcw, delta_m2m_new=\
         force_of_change_density_weights(w_m2m,zsun_m2m,
@@ -148,7 +159,7 @@ def force_of_change_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
                                         z_obs,
                                         dens_obs,dens_obs_noise,
                                         h_m2m=h_m2m,kernel=kernel,
-                                        delta_m2m=delta_m2m)
+                                        delta_m2m=delta_m2m,Wij=Wij)
     # Add velocity constraint if given
     if not densv2_obs is None:
         fcwv2, deltav2_m2m_new= \
@@ -158,7 +169,8 @@ def force_of_change_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
                                            densv2_obs,densv2_obs_noise,
                                            h_m2m=h_m2m,
                                            kernel=kernel,
-                                           deltav2_m2m=deltav2_m2m)
+                                           deltav2_m2m=deltav2_m2m,
+                                           Wij=Wvz2ij)
     else:
         fcwv2= 0.
         deltav2_m2m_new= 0.
@@ -219,7 +231,7 @@ def run_m2m(w_init,z_init,vz_init,
             step=0.001,nstep=1000,
             eps=0.1,mu=1.,prior='entropy',
             kernel=epanechnikov_kernel,h_m2m=0.02,
-            smooth=None,st96smooth=False,
+            smooth=None,st96smooth=False,schwarzschild=False,
             output_wevolution=False):
     """
     NAME:
@@ -246,6 +258,7 @@ def run_m2m(w_init,z_init,vz_init,
        h_m2m= kernel size parameter for computing the observables
        smooth= smoothing parameter alpha (None for no smoothing)
        st96smooth= (False) if True, smooth the constraints (Syer & Tremaine 1996), if False, smooth the objective function and its derivative (Dehnen 2000)
+       schwarzschild= (False) if True, first compute orbit-averaged kernels and use those rather than the point-estimates
        output_wevolution= if set to an integer, return the time evolution of this many randomly selected weights
     OUTPUT:
        (w_out,Q_out,[wevol,rndindx]) - (output weights [N],objective function as a function of time,
@@ -263,13 +276,23 @@ def run_m2m(w_init,z_init,vz_init,
     if output_wevolution:
         rndindx= numpy.random.permutation(len(w_out))[:output_wevolution]
         wevol= numpy.zeros((output_wevolution,nstep))
+    # Use orbit-averaged weights?
+    if schwarzschild:
+        Kij, Kvz2ij= precalc_kernel(z_init,vz_init,
+                                    omega_m2m,zsun_m2m,
+                                    z_obs,step=step,nstep=nstep,
+                                    kernel=kernel,h_m2m=h_m2m)
+    else:
+        Kij= None
+        Kvz2ij= None
     # Compute force of change for first iteration
     fcw, delta_m2m_new, deltav2_m2m_new= \
         force_of_change_weights(w_init,zsun_m2m,z_init,vz_init,
                                 z_obs,dens_obs,dens_obs_noise,
                                 densv2_obs,densv2_obs_noise,
                                 prior,mu,w_init,
-                                h_m2m=h_m2m,kernel=kernel)
+                                h_m2m=h_m2m,kernel=kernel,
+                                Wij=Kij,Wvz2ij=Kvz2ij)
     fcw*= w_init
     if not smooth is None:
         delta_m2m= delta_m2m_new
@@ -319,7 +342,8 @@ def run_m2m(w_init,z_init,vz_init,
                                     prior,mu,w_init,
                                     h_m2m=h_m2m,kernel=kernel,
                                     delta_m2m=tdelta_m2m,
-                                    deltav2_m2m=tdeltav2_m2m)
+                                    deltav2_m2m=tdeltav2_m2m,
+                                    Wij=Kij,Wvz2ij=Kvz2ij)
         fcw_new*= w_out
         # Increment smoothing
         if not smooth is None and st96smooth:
