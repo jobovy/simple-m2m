@@ -170,6 +170,48 @@ def force_of_change_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
         fcw+= force_of_change_gamma_weights(w_m2m,mu,w_prior)
     return (fcw,delta_m2m_new,deltav2_m2m_new)
 
+################################ M2M OPTIMIZATION #############################
+def precalc_kernel(z_init,vz_init,
+                   omega_m2m,zsun_m2m,
+                   z_obs,step=0.001,nstep=1000,
+                   kernel=epanechnikov_kernel,h_m2m=0.02):
+    """
+    NAME:
+       precalc_kernel
+    PURPOSE:
+       Orbit average the kernels
+    INPUT:
+       z_init - initial z [N]
+       vz_init - initial vz (rad) [N]
+       omega_m2m - potential parameter omega
+       zsun_m2m - Sun's height above the plane [N]
+       z_obs - heights at which the density observations are made
+       step= stepsize of orbit integration
+       nstep= number of steps to integrate the orbits for
+       kernel= a smoothing kernel
+       h_m2m= kernel size parameter for computing the observables
+    OUTPUT:
+       (Kdens,Kdensv2) - (density kernels [n_zobs,n_weights],
+                          densityx v^2 kernels [n_zobs,n_weights])
+    HISTORY:
+       2017-03-14 - Written - Bovy (UofT/CCA)
+    """
+    Kij= numpy.zeros((len(z_obs),len(z_init)))
+    Kvz2ij= numpy.zeros((len(z_obs),len(z_init)))
+    A_init, phi_init= zvz_to_Aphi(z_init,vz_init,omega_m2m)
+    for ii in range(nstep):
+        # Then update force
+        phi_now= omega_m2m*ii*step+phi_init
+        z_m2m= A_init*numpy.cos(phi_now)
+        vz_m2m= -A_init*omega_m2m*numpy.sin(phi_now)
+        # Compute kernel
+        tW= numpy.empty((len(z_obs),len(z_init)))
+        for jj,zo in enumerate(z_obs):
+            tW[jj]= kernel(numpy.fabs(zo-z_m2m+zsun_m2m),h_m2m)
+        Kij+= tW
+        Kvz2ij+= tW*vz_m2m**2.
+    return (Kij/nstep,Kvz2ij/nstep)
+
 def run_m2m(w_init,z_init,vz_init,
             omega_m2m,zsun_m2m,
             z_obs,dens_obs,dens_obs_noise,
