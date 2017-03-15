@@ -65,6 +65,24 @@ def compute_densv2(z,vz,zsun,z_obs,h_obs,w=None,kernel=epanechnikov_kernel):
     return densv2
 
 ################################### M2M PRIOR #################################
+def prior(w_m2m,mu,w_prior,prior):
+    """Evaluate the log prior for the different cases"""
+    if prior.lower() == 'entropy':
+        return prior_entropy(w_m2m,mu,w_prior)
+    else:
+        return prior_gamma(w_m2m,mu,w_prior)
+def sample_prior(mu,w_prior,prior):
+    if prior.lower() == 'entropy':
+        if numpy.all(numpy.fabs(w_prior/w_prior[0]-1.) < 10.**-8.):
+            return sample_entropy(mu,w_prior[0],n=len(w_prior))
+        else:
+            raise NotImplementedError("Sampling the entropy prior with different prior weights for different orbits not implemented yet")
+    else:
+        if numpy.all(numpy.fabs(w_prior/w_prior[0]-1.) < 10.**-8.):
+            return sample_gamma(mu,w_prior[0],n=len(w_prior))
+        else:
+            raise NotImplementedError("Sampling the gamma prior with different prior weights for different orbits not implemented yet")
+
 def prior_entropy(w_m2m,mu,w_prior):
     """Returns log prior for each weight individually"""
     return -mu*w_m2m*(numpy.log(w_m2m/w_prior)-1.)
@@ -369,6 +387,74 @@ def fit_m2m(w_init,z_init,vz_init,
     if output_wevolution:
         out= out+(wevol,rndindx,)
     return out
+
+
+def sample_m2m(nsamples,
+               w_init,z_init,vz_init,
+               omega_m2m,zsun_m2m,
+               z_obs,dens_obs,dens_obs_noise,**kwargs):
+#               densv2_obs=None,densv2_obs_noise=None,
+#               step=0.001,nstep=1000,
+#               eps=0.1,mu=1.,prior='entropy',w_prior=None,
+#               kernel=epanechnikov_kernel,h_m2m=0.02,
+#               smooth=None,st96smooth=False,schwarzschild=False,
+#               output_wevolution=False):
+    """
+    NAME:
+       sample_m2m
+    PURPOSE:
+       Sample parameters using M2M optimization on the harmonic-oscillator data
+    INPUT:
+       nsamples - number of samples from the ~PDF
+       Rest of the parameters are the same as for fit_m2m
+    OUTPUT:
+       (w_out,Q_out,z,vz) - (output weights [nsamples,N],
+                             objective function [nsamples,nobs],
+                             positions at the final step of each sample [nsamples,N],
+                             velocities at the final step of each sample [nsamples,N])
+    HISTORY:
+       2017-03-15 - Written - Bovy (UofT/CCA)
+    """
+    nw= len(w_init)
+    w_out= numpy.empty((nsamples,nw))
+    z_out= numpy.empty_like(w_out)
+    vz_out= numpy.empty_like(w_out)
+    # Copy some kwargs that we need to re-use
+    densv2_obs= copy.deepcopy(kwargs.get('densv2_obs',None))
+    if not densv2_obs is None:
+        Q_out= numpy.empty((nsamples,len(dens_obs)+len(densv2_obs)))
+    else:
+        Q_out= numpy.empty((nsamples,len(dens_obs)))
+    w_prior= copy.deepcopy(kwargs.get('w_prior',w_init))
+    # Setup orbits
+    A_init, phi_init= zvz_to_Aphi(z_init,vz_init,omega_m2m)
+    z_m2m= z_init
+    vz_m2m= vz_init
+    for ii in range(nsamples):
+        # Draw new observations
+        tdens_obs= dens_obs\
+            +numpy.random.normal(size=len(dens_obs))*dens_obs_noise
+        if not densv2_obs is None:
+            kwargs['densv2_obs']= densv2_obs\
+                +numpy.random.normal(size=len(densv2_obs))\
+                *kwargs.get('densv2_obs_noise')
+        # Draw new prior weights
+        kwargs['w_prior']= sample_prior(kwargs.get('mu',1.),w_prior,
+                                        kwargs.get('prior','entropy'))
+        tw,tQ= fit_m2m(kwargs['w_prior'],z_m2m,vz_m2m,omega_m2m,zsun_m2m,
+                       z_obs,tdens_obs,dens_obs_noise,
+                       **kwargs)
+        w_out[ii]= tw
+        Q_out[ii]= tQ[-1]
+        # Update orbits
+        z_m2m, vz_m2m= Aphi_to_zvz(A_init,
+                                   phi_init+omega_m2m*kwargs.get('nstep',1000)\
+                                       *kwargs.get('step',0.001)*(ii+1),
+                                   omega_m2m)
+        z_out[ii]= z_m2m
+        vz_out[ii]= vz_m2m
+    return (w_out,Q_out,z_out,vz_out)
+
 
 
 ### M2M cycle definition
