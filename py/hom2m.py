@@ -224,20 +224,20 @@ def precalc_kernel(z_init,vz_init,
         Kvz2ij+= tW*vz_m2m**2.
     return (Kij/nstep,Kvz2ij/nstep)
 
-def run_m2m(w_init,z_init,vz_init,
+def fit_m2m(w_init,z_init,vz_init,
             omega_m2m,zsun_m2m,
             z_obs,dens_obs,dens_obs_noise,
             densv2_obs=None,densv2_obs_noise=None,
             step=0.001,nstep=1000,
-            eps=0.1,mu=1.,prior='entropy',
+            eps=0.1,mu=1.,prior='entropy',w_prior=None,
             kernel=epanechnikov_kernel,h_m2m=0.02,
             smooth=None,st96smooth=False,schwarzschild=False,
             output_wevolution=False):
     """
     NAME:
-       run_m2m
+       fit_m2m
     PURPOSE:
-       Run M2M on the harmonic-oscillator data to optimize
+       Run M2M optimization on the harmonic-oscillator data
     INPUT:
        w_init - initial weights [N]
        z_init - initial z [N]
@@ -254,6 +254,7 @@ def run_m2m(w_init,z_init,vz_init,
        eps= M2M epsilon parameter
        mu= M2M entropy parameter mu
        prior= ('entropy' or 'gamma')
+       w_prior= (None) prior weights (if None, equal to w_init)
        kernel= a smoothing kernel
        h_m2m= kernel size parameter for computing the observables
        smooth= smoothing parameter alpha (None for no smoothing)
@@ -271,6 +272,8 @@ def run_m2m(w_init,z_init,vz_init,
        2017-02-27 - Add st96smooth option and make Dehnen smoothing the default - Bovy (UofT/CCA)
     """
     w_out= copy.deepcopy(w_init)
+    if w_prior is None:
+        w_prior= w_init
     Q_out= []
     A_init, phi_init= zvz_to_Aphi(z_init,vz_init,omega_m2m)
     if output_wevolution:
@@ -290,7 +293,7 @@ def run_m2m(w_init,z_init,vz_init,
         force_of_change_weights(w_init,zsun_m2m,z_init,vz_init,
                                 z_obs,dens_obs,dens_obs_noise,
                                 densv2_obs,densv2_obs_noise,
-                                prior,mu,w_init,
+                                prior,mu,w_prior,
                                 h_m2m=h_m2m,kernel=kernel,
                                 Wij=Kij,Wvz2ij=Kvz2ij)
     fcw*= w_init
@@ -339,7 +342,7 @@ def run_m2m(w_init,z_init,vz_init,
             force_of_change_weights(w_out,zsun_m2m,z_m2m,vz_m2m,
                                     z_obs,dens_obs,dens_obs_noise,
                                     densv2_obs,densv2_obs_noise,
-                                    prior,mu,w_init,
+                                    prior,mu,w_prior,
                                     h_m2m=h_m2m,kernel=kernel,
                                     delta_m2m=tdelta_m2m,
                                     deltav2_m2m=tdeltav2_m2m,
