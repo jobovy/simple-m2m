@@ -2,6 +2,7 @@
 import numpy
 import copy
 from scipy import interpolate, integrate
+import tqdm
 
 ######################### COORDINATE TRANSFORMATIONS ##########################
 def zvz_to_Aphi(z,vz,omega):
@@ -111,6 +112,12 @@ def sample_gamma(mu,w_prior,n=1.):
 # include things like eps, weight)
 
 # Due to the prior
+def force_of_change_prior_weights(w_m2m,mu,w_prior,prior):
+    if prior.lower() == 'entropy':
+        return force_of_change_entropy_weights(w_m2m,mu,w_prior)
+    else:
+        return force_of_change_gamma_weights(w_m2m,mu,w_prior)
+
 def force_of_change_entropy_weights(w_m2m,mu,w_prior):
     return -mu*numpy.log(w_m2m/w_prior)
 
@@ -194,10 +201,7 @@ def force_of_change_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
         deltav2_m2m_new= 0.
     fcw+= fcwv2
     # Add prior
-    if prior.lower() == 'entropy':
-        fcw+= force_of_change_entropy_weights(w_m2m,mu,w_prior)
-    else:
-        fcw+= force_of_change_gamma_weights(w_m2m,mu,w_prior)
+    fcw+= force_of_change_prior_weights(w_m2m,mu,w_prior,prior)
     return (fcw,delta_m2m_new,deltav2_m2m_new)
 
 ################################ M2M OPTIMIZATION #############################
@@ -393,12 +397,6 @@ def sample_m2m(nsamples,
                w_init,z_init,vz_init,
                omega_m2m,zsun_m2m,
                z_obs,dens_obs,dens_obs_noise,**kwargs):
-#               densv2_obs=None,densv2_obs_noise=None,
-#               step=0.001,nstep=1000,
-#               eps=0.1,mu=1.,prior='entropy',w_prior=None,
-#               kernel=epanechnikov_kernel,h_m2m=0.02,
-#               smooth=None,st96smooth=False,schwarzschild=False,
-#               output_wevolution=False):
     """
     NAME:
        sample_m2m
@@ -425,12 +423,11 @@ def sample_m2m(nsamples,
         Q_out= numpy.empty((nsamples,len(dens_obs)+len(densv2_obs)))
     else:
         Q_out= numpy.empty((nsamples,len(dens_obs)))
-    w_prior= copy.deepcopy(kwargs.get('w_prior',w_init))
     # Setup orbits
     A_init, phi_init= zvz_to_Aphi(z_init,vz_init,omega_m2m)
     z_m2m= z_init
     vz_m2m= vz_init
-    for ii in range(nsamples):
+    for ii in tqdm.tqdm(range(nsamples)):
         # Draw new observations
         tdens_obs= dens_obs\
             +numpy.random.normal(size=len(dens_obs))*dens_obs_noise
@@ -438,9 +435,6 @@ def sample_m2m(nsamples,
             kwargs['densv2_obs']= densv2_obs\
                 +numpy.random.normal(size=len(densv2_obs))\
                 *kwargs.get('densv2_obs_noise')
-        # Draw new prior weights
-        kwargs['w_prior']= sample_prior(kwargs.get('mu',1.),w_prior,
-                                        kwargs.get('prior','entropy'))
         tw,tQ= fit_m2m(kwargs['w_prior'],z_m2m,vz_m2m,omega_m2m,zsun_m2m,
                        z_obs,tdens_obs,dens_obs_noise,
                        **kwargs)
