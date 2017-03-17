@@ -314,6 +314,7 @@ def fit_m2m(w_init,z_init,vz_init,
        2016-12-16 - Added explicit noise in the observed densities - Bovy (UofT/CCA)
        2017-02-22 - Refactored to more general function - Bovy (UofT/CCA)
        2017-02-27 - Add st96smooth option and make Dehnen smoothing the default - Bovy (UofT/CCA)
+       2017-03-17 - Added zsun fit - Bovy (CCA/UofT)
     """
     w_out= copy.deepcopy(w_init)
     zsun_out= numpy.empty(nstep)
@@ -457,17 +458,22 @@ def sample_m2m(nsamples,
        nsamples - number of samples from the ~PDF
        Rest of the parameters are the same as for fit_m2m
     OUTPUT:
-       (w_out,Q_out,z,vz) - (output weights [nsamples,N],
-                             objective function [nsamples,nobs],
-                             positions at the final step of each sample [nsamples,N],
-                             velocities at the final step of each sample [nsamples,N])
+       (w_out,[zsun_out],Q_out,z,vz) - 
+               (output weights [nsamples,N],
+               [Solar offset [ntimes,nsamples],
+               objective function [nsamples,nobs],
+               positions at the final step of each sample [nsamples,N],
+               velocities at the final step of each sample [nsamples,N])
     HISTORY:
        2017-03-15 - Written - Bovy (UofT/CCA)
+       2017-03-17 - Added zsun - Bovy (UofT/CCA)
     """
     nw= len(w_init)
     w_out= numpy.empty((nsamples,nw))
     z_out= numpy.empty_like(w_out)
     vz_out= numpy.empty_like(w_out)
+    if kwargs.get('fit_zsun',False): 
+        zsun_out= numpy.empty((kwargs.get('nstep',1000),nsamples))
     # Copy some kwargs that we need to re-use
     densv2_obs= copy.deepcopy(kwargs.get('densv2_obs',None))
     if not densv2_obs is None:
@@ -486,9 +492,13 @@ def sample_m2m(nsamples,
             kwargs['densv2_obs']= densv2_obs\
                 +numpy.random.normal(size=len(densv2_obs))\
                 *kwargs.get('densv2_obs_noise')
-        tw,tQ= fit_m2m(kwargs['w_prior'],z_m2m,vz_m2m,omega_m2m,zsun_m2m,
-                       z_obs,tdens_obs,dens_obs_noise,
-                       **kwargs)
+        tout= fit_m2m(kwargs['w_prior'],z_m2m,vz_m2m,omega_m2m,zsun_m2m,
+                      z_obs,tdens_obs,dens_obs_noise,
+                      **kwargs)
+        if kwargs.get('fit_zsun',False):
+            zsun_out[:,ii]= tout[1]
+            tw= tout[0]
+            tQ= tout[2]
         w_out[ii]= tw
         Q_out[ii]= tQ[-1]
         # Update orbits
@@ -498,8 +508,10 @@ def sample_m2m(nsamples,
                                    omega_m2m)
         z_out[ii]= z_m2m
         vz_out[ii]= vz_m2m
-    return (w_out,Q_out,z_out,vz_out)
-
+    out= (w_out,)
+    if kwargs.get('fit_zsun',False): out= out+(zsun_out,)
+    out= out+(Q_out,z_out,vz_out,)
+    return out
 
 
 ### M2M cycle definition
