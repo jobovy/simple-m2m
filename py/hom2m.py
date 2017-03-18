@@ -323,7 +323,7 @@ def fit_m2m(w_init,z_init,vz_init,
     # Parse eps
     if isinstance(eps,float):
         eps= [eps]
-        if fit_zsun: eps.append(eps)
+        if fit_zsun: eps.append(eps[0])
     Q_out= []
     A_init, phi_init= zvz_to_Aphi(z_init,vz_init,omega_m2m)
     if output_wevolution:
@@ -453,14 +453,17 @@ def sample_m2m(nsamples,
     NAME:
        sample_m2m
     PURPOSE:
-       Sample parameters using M2M optimization on the harmonic-oscillator data
+       Sample parameters using M2M optimization for the weights and Metropolis-Hastings for the other parameters on the harmonic-oscillator data
     INPUT:
        nsamples - number of samples from the ~PDF
+       sig_zsun= (0.005) if sampling zsun (fit_zsun=True), proposal stepsize for steps in zsun
+       nmh_zsun= (20) number of MH steps to do for zsun for each weights sample
+       nstep_zsun= (500) number of steps to average the likelihood over for zsun MH
        Rest of the parameters are the same as for fit_m2m
     OUTPUT:
        (w_out,[zsun_out],Q_out,z,vz) - 
                (output weights [nsamples,N],
-               [Solar offset [ntimes,nsamples],
+               [Solar offset [nsamples],
                objective function [nsamples,nobs],
                positions at the final step of each sample [nsamples,N],
                velocities at the final step of each sample [nsamples,N])
@@ -472,8 +475,15 @@ def sample_m2m(nsamples,
     w_out= numpy.empty((nsamples,nw))
     z_out= numpy.empty_like(w_out)
     vz_out= numpy.empty_like(w_out)
-    if kwargs.get('fit_zsun',False): 
-        zsun_out= numpy.empty((kwargs.get('nstep',1000),nsamples))
+    nstep= kwargs.get('nstep',1000)
+    # zsun
+    fit_zsun= kwargs.get('fit_zsun',False)
+    kwargs['fit_zsun']= False # Turn off for weights fits
+    sig_zsun= kwargs.pop('sig_zsun',0.005)
+    nmh_zsun= kwargs.pop('nmh_zsun',20)
+    nstep_zsun= kwargs.pop('nstep_zsun',500)
+    if fit_zsun: 
+        zsun_out= numpy.empty((nsamples))
     # Copy some kwargs that we need to re-use
     densv2_obs= copy.deepcopy(kwargs.get('densv2_obs',None))
     if not densv2_obs is None:
@@ -495,11 +505,24 @@ def sample_m2m(nsamples,
         tout= fit_m2m(kwargs['w_prior'],z_m2m,vz_m2m,omega_m2m,zsun_m2m,
                       z_obs,tdens_obs,dens_obs_noise,
                       **kwargs)
-        if kwargs.get('fit_zsun',False):
-            zsun_out[:,ii]= tout[1]
-            tw= tout[0]
-            tQ= tout[2]
-        w_out[ii]= tw
+        tQ= tout[1]
+        if fit_zsun:
+            for jj in range(nmh_zsun):
+                # Do a MH step
+                zsun_new= zsun_m2m+numpy.random.normal()*sig_zsun
+                kwargs['nstep']= nstep_zsun+3
+                dum= fit_m2m(tout[0],z_m2m,vz_m2m,omega_m2m,zsun_new,
+                             z_obs,tdens_obs,dens_obs_noise,
+                             **kwargs)
+                kwargs['nstep']= nstep
+                acc= -numpy.mean(\
+                    numpy.sum(dum[1][-nstep_zsun:-1]-tQ[-nstep_zsun:-1],
+                              axis=1))/2.
+                if acc > numpy.log(numpy.random.uniform()):
+                    zsun_m2m= zsun_new
+                    tQ= dum[1]
+            zsun_out[ii]= zsun_m2m
+        w_out[ii]= tout[0]
         Q_out[ii]= tQ[-1]
         # Update orbits
         z_m2m, vz_m2m= Aphi_to_zvz(A_init,
@@ -509,7 +532,7 @@ def sample_m2m(nsamples,
         z_out[ii]= z_m2m
         vz_out[ii]= vz_m2m
     out= (w_out,)
-    if kwargs.get('fit_zsun',False): out= out+(zsun_out,)
+    if fit_zsun: out= out+(zsun_out,)
     out= out+(Q_out,z_out,vz_out,)
     return out
 
