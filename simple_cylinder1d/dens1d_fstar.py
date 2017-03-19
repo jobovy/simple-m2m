@@ -21,7 +21,7 @@ from StringIO import StringIO
 # eplx/plx limit pi=parallax
 eplxlim=0.15
 # Vt mag limit
-vtlim=11.0
+vtlim=11.5
 # colour range, F0V and F9V
 bvtcolmin=0.317
 bvtcolmax=0.587
