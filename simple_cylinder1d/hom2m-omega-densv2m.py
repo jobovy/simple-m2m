@@ -25,8 +25,8 @@ numpy.random.seed(4)
 # input parameters
 # We only observe the density at a few z
 # z_obs= numpy.array([0.075,0.1,0.125,0.15,0.175,0.2,-0.075,-0.1,-0.125,-0.15,-0.175,-0.2])
-z_obs= numpy.array([0.075,0.1,0.125,0.15,0.175,-0.075,-0.1,-0.125,-0.15,-0.175])
-h_obs= 0.1
+z_obs= numpy.array([0.0,0.025,0.05,0.075,0.1,0.125,0.15,0.175,-0.025,-0.05,-0.075,-0.1,-0.125,-0.15,-0.175])
+h_obs= 0.075
 h_m2m= h_obs
 
 # print input parameters
@@ -75,6 +75,14 @@ dens_obs_noise= dens_obs/numpy.sqrt(nsbin_obs)
 print ' dens =',dens_obs
 print ' dens uncertainty =',dens_obs_noise
 
+file_cs='cylinder_dens_hom2m-omega.asc'
+f=open(file_cs,'w')
+i=0
+while i < len(z_obs):
+  print >>f, "%f %f %f" %(z_obs[i],dens_obs[i],dens_obs_noise[i])
+  i+=1
+f.close()
+
 # dens_obs_noise= numpy.sqrt(dens_obs)*0.2*numpy.sqrt(numpy.amax(dens_obs))\
 #    /(numpy.fabs(z_obs**2)/numpy.amin(numpy.fabs(z_obs**2)))
 # observation already has a noise
@@ -120,11 +128,20 @@ print ' new <v^2> = sigz^2 =',v2m_obs
 v2m_obs_noise= v2m_obs/numpy.sqrt(nsbin_obs)
 print ' v^2 errors=',v2m_obs_noise
 
+file_cs='cylinder_v2m_hom2m-omega.asc'
+f=open(file_cs,'w')
+i=0
+while i < len(z_obs):
+  print >>f, "%f %f %f %f" %(z_obs[i],v2m_obs[i],vm_obs[i],v2m_obs_noise[i])
+  i+=1
+f.close()
+
 ### initial model
 
 # estimated zsun from above
 # zsun_obs=zsun_out[-1]
-zsun_obs=0.017
+# zsun_obs=0.018
+zsun_obs=0.021
 print 'zsun_obs set =',zsun_obs
 
 n_m2m= 4000
@@ -135,6 +152,7 @@ sigma_init= 15.0
 sigma_true=15.0
 # omega = sqrt(2)x(v (km/s))/z (kpc)
 omega_true= 1.4*15.0/0.2-10.0
+# omega_true= 70.0
 omega_m2m=omega_true
 E_m2m= numpy.random.exponential(scale=sigma_init**2.,size=n_m2m)
 phi_m2m_omega= numpy.random.uniform(size=n_m2m)*2.*numpy.pi
@@ -161,7 +179,7 @@ plt.yscale('log',nonposy='clip')
 plt.subplot(1,2,2)
 bovy_plot.bovy_plot(z_out,numpy.sqrt(v2m_init),'-',semilogy=True,
                    xlabel=r'$\tilde{z}$',ylabel=r'$\langle v^2\rangle^{1/2}$',
-                    xrange=[-.25,0.25],yrange=[10.0,100.0],gcf=True)
+                    xrange=[-.25,0.25],yrange=[10.0,50.0],gcf=True)
 bovy_plot.bovy_plot(z_obs,numpy.sqrt(v2m_obs),'o',semilogy=True,overplot=True)
 bovy_plot.bovy_plot(z_out,numpy.sqrt(v2m_init),'-',semilogy=True,overplot=True,zorder=0)
 plt.errorbar(z_obs,numpy.sqrt(v2m_obs),yerr=numpy.sqrt(v2m_obs_noise),marker='None',ls='none',color=sns.color_palette()[1])
@@ -212,20 +230,20 @@ bovy_plot.bovy_print(axes_labelsize=17.,text_fontsize=12.,xtick_labelsize=15.,yt
 plt.subplot(2,3,1)
 bovy_plot.bovy_plot(z_out,dens_init,'-',semilogy=True,
                    xlabel=r'$\tilde{z}$',ylabel=r'$\nu_{\mathrm{obs}}(\tilde{z})$',
-                   xrange=[-.25,0.25],yrange=[0.003,30.],gcf=True)
+                   xrange=[-.25,0.25],yrange=[0.1,10.],gcf=True)
 bovy_plot.bovy_plot(z_obs,dens_obs,'o',semilogy=True,overplot=True)
 bovy_plot.bovy_plot(z_out,dens_final,'-',semilogy=True,overplot=True,zorder=0)
 plt.errorbar(z_obs,dens_obs,yerr=dens_obs_noise,marker='None',ls='none',color=sns.color_palette()[1])
 plt.yscale('log',nonposy='clip')
 plt.subplot(2,3,2)
 v2m_final= compute_v2m(z_m2m,vz_m2m,zsun_obs,z_out,h_obs,w_out)
-bovy_plot.bovy_plot(z_out,v2m_init,'-',semilogy=True,
+bovy_plot.bovy_plot(z_out,v2m_init,'-',semilogy=False,
                    xlabel=r'$\tilde{z}$',ylabel=r'$\langle v^2\rangle^{1/2}$',
-                    xrange=[-.25,0.25],yrange=[10.0,100.0],gcf=True)
-bovy_plot.bovy_plot(z_obs,numpy.sqrt(v2m_obs),'o',semilogy=True,overplot=True)
-bovy_plot.bovy_plot(z_out,numpy.sqrt(v2m_final),'-',semilogy=True,overplot=True,zorder=0)
+                    xrange=[-.25,0.25],yrange=[0.0,100.0],gcf=True)
+bovy_plot.bovy_plot(z_obs,numpy.sqrt(v2m_obs),'o',semilogy=False,overplot=True)
+bovy_plot.bovy_plot(z_out,numpy.sqrt(v2m_final),'-',semilogy=False,overplot=True,zorder=0)
 plt.errorbar(z_obs,numpy.sqrt(v2m_obs),yerr=numpy.sqrt(v2m_obs_noise),marker='None',ls='none',color=sns.color_palette()[1])
-plt.yscale('log',nonposy='clip')
+# plt.yscale('log',nonposy='clip')
 plt.subplot(2,3,3)
 bovy_plot.bovy_plot(numpy.linspace(0.,1.,nstep)*nstep*step*numpy.mean(omega_true)/2./numpy.pi,omega_out,'-',
                    xlabel=r'$\mathrm{orbits}$',ylabel=r'$\omega(t)$',gcf=True,semilogx=True,zorder=1,

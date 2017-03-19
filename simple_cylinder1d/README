@@ -3,6 +3,12 @@ hom2m_sc1d.py
  hom2m library for simple-cylinder1d data
 
 
+### run hom2m using the output of densv2m1d_fstar_sample.py
+
+
+hom2m-densv2m.py
+ zsun fit
+
 ### run hom2m using the output of simple 1D selection. 
 
 hom2m-omega-densv2m.py
@@ -15,11 +21,10 @@ hom2m-densv2m.py
 hom2m_simple1d.py
  only use density information 
 
-### simple R=0.1 or 0.2 kpc cylinder 1D density for F star
+### simple R=0.1 kpc cylinder 1D density for F star
  calculate density and <v^2> at different z by randomly displacing the data using the error
 
-dens1d_fstar_sample.py
-
+densv2m1d_fstar_sample.py
 
 ### simple R=0.1 or 0.2 kpc cylinder 1D density for F star
  calculate density at different z, and output the stellar position within the cylinder.
@@ -39,6 +44,7 @@ Mv=VTmag-5.0*log10(1000.0/Plx)+5.0
  dlim = 234.4 pc
  dz within the cylinder of 0.1 kpc radius zlim= 212 pc
  dz within the cylinder of 0.2 kpc radius zlim= 122 pc
-
-
+* V=11.5
+ dlim=295.1 pc
+ dz within the cylinder of 0.1 kprc radius zlim=0.277
 

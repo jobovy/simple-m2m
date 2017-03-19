@@ -25,8 +25,8 @@ numpy.random.seed(4)
 # input parameters
 # We only observe the density at a few z
 # z_obs= numpy.array([0.075,0.1,0.125,0.15,0.175,0.2,-0.075,-0.1,-0.125,-0.15,-0.175,-0.2])
-z_obs= numpy.array([0.075,0.1,0.125,0.15,0.175,-0.075,-0.1,-0.125,-0.15,-0.175])
-h_obs= 0.05
+z_obs= numpy.array([0.0,0.025,0.05,0.075,0.1,0.125,0.15,0.175,-0.025,-0.05,-0.075,-0.1,-0.125,-0.15,-0.175])
+h_obs= 0.075
 h_m2m= h_obs
 
 # print input parameters
@@ -146,7 +146,8 @@ phi_m2m= numpy.random.uniform(size=n_m2m)*2.*numpy.pi
 # scale with 220 km/s and 8 kpc
 sigma_true=15.0
 # omega = sqrt(2)x(v (km/s))/z (kpc)
-omega_true= 1.4*15.0/0.2
+# from hom2m-omega
+omega_true= 122.0
 A_m2m= numpy.sqrt(2.*E_m2m)/omega_true
 w_init= numpy.ones(n_m2m)
 z_m2m= A_m2m*numpy.cos(phi_m2m)
@@ -221,13 +222,13 @@ plt.yscale('log',nonposy='clip')
 #
 plt.subplot(2,3,2)
 v2m_final= compute_v2m(z_m2m,vz_m2m,zsun_guess,z_out,h_obs,w_out)
-bovy_plot.bovy_plot(z_out,numpy.sqrt(v2m_init),'-',semilogy=True,
+bovy_plot.bovy_plot(z_out,numpy.sqrt(v2m_init),'-',semilogy=False,
                    xlabel=r'$\tilde{z}$',ylabel=r'$\langle v^2\rangle^{1/2}$',
-                    xrange=[-.25,0.25],yrange=[10.0,100.0],gcf=True)
-bovy_plot.bovy_plot(z_obs,numpy.sqrt(v2m_obs),'o',semilogy=True,overplot=True)
-bovy_plot.bovy_plot(z_out,numpy.sqrt(v2m_final),'-',semilogy=True,overplot=True,zorder=0)
+                    xrange=[-.25,0.25],yrange=[0.0,50.0],gcf=True)
+bovy_plot.bovy_plot(z_obs,numpy.sqrt(v2m_obs),'o',semilogy=False,overplot=True)
+bovy_plot.bovy_plot(z_out,numpy.sqrt(v2m_final),'-',semilogy=False,overplot=True,zorder=0)
 plt.errorbar(z_obs,numpy.sqrt(v2m_obs),yerr=numpy.sqrt(v2m_obs_noise),marker='None',ls='none',color=sns.color_palette()[1])
-plt.yscale('log',nonposy='clip')
+# plt.yscale('log',nonposy='clip')
 #
 plt.subplot(2,3,3)
 for ii in range(len(wevol)):
@@ -262,7 +263,7 @@ plt.show()
 ### run M2M with variable zsun
 
 step= numpy.pi/20.0
-nstep= 400000
+nstep= 40000
 eps= 10.**-4.
 eps_zo= eps/100.
 mu= 1.
@@ -294,13 +295,13 @@ plt.yscale('log',nonposy='clip')
 #
 plt.subplot(2,3,2)
 v2m_final= compute_v2m(z_m2m,vz_m2m,zsun_guess,z_out,h_obs,w_out)
-bovy_plot.bovy_plot(z_out,numpy.sqrt(v2m_init),'-',semilogy=True,
+bovy_plot.bovy_plot(z_out,numpy.sqrt(v2m_init),'-',semilogy=False,
                    xlabel=r'$\tilde{z}$',ylabel=r'$\langle v^2\rangle^{1/2}$',
-                    xrange=[-.25,0.25],yrange=[10.0,100.0],gcf=True)
-bovy_plot.bovy_plot(z_obs,numpy.sqrt(v2m_obs),'o',semilogy=True,overplot=True)
-bovy_plot.bovy_plot(z_out,numpy.sqrt(v2m_final),'-',semilogy=True,overplot=True,zorder=0)
+                    xrange=[-.25,0.25],yrange=[0.0,50.0],gcf=True)
+bovy_plot.bovy_plot(z_obs,numpy.sqrt(v2m_obs),'o',semilogy=False,overplot=True)
+bovy_plot.bovy_plot(z_out,numpy.sqrt(v2m_final),'-',semilogy=False,overplot=True,zorder=0)
 plt.errorbar(z_obs,numpy.sqrt(v2m_obs),yerr=numpy.sqrt(v2m_obs_noise),marker='None',ls='none',color=sns.color_palette()[1])
-plt.yscale('log',nonposy='clip')
+# plt.yscale('log',nonposy='clip')
 #
 plt.subplot(2,3,3)
 for ii in range(len(wevol)):

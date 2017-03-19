@@ -37,8 +37,11 @@ else:
 def compute_dens(z,zsun,z_obs,h_obs,w=None):
     if w is None: w= numpy.ones_like(z)
     dens= numpy.zeros_like(z_obs)
+# assuming zdistmax=0.175+h_obs
+    nstar=len(numpy.where(z<0.175+h_obs)[0])
     for jj,zo in enumerate(z_obs):
-        dens[jj]= numpy.sum(w*kernel(numpy.fabs(zo-z+zsun),h_obs))/len(z)
+#        dens[jj]= numpy.sum(w*kernel(numpy.fabs(zo-z+zsun),h_obs))/len(z)
+        dens[jj]= numpy.sum(w*kernel(numpy.fabs(zo-z+zsun),h_obs))/nstar
     return dens
 
 ### M2M force of change definitions
