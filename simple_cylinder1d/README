@@ -5,8 +5,7 @@ hom2m_sc1d.py
 
 ### run hom2m using the output of densv2m1d_fstar_sample.py
 
-
-hom2m-densv2m.py
+hom2m-densv2m_obsamp.py
  zsun fit
 
 ### run hom2m using the output of simple 1D selection. 
