@@ -481,9 +481,10 @@ def sample_m2m(nsamples,
     kwargs['fit_zsun']= False # Turn off for weights fits
     sig_zsun= kwargs.pop('sig_zsun',0.005)
     nmh_zsun= kwargs.pop('nmh_zsun',20)
-    nstep_zsun= kwargs.pop('nstep_zsun',500)
+    nstep_zsun= kwargs.pop('nstep_zsun',499*fit_zsun+1)
     if fit_zsun: 
         zsun_out= numpy.empty((nsamples))
+        nacc= 0
     # Copy some kwargs that we need to re-use
     densv2_obs= copy.deepcopy(kwargs.get('densv2_obs',None))
     if not densv2_obs is None:
@@ -507,12 +508,14 @@ def sample_m2m(nsamples,
                       **kwargs)
         tQ= tout[1]
         if fit_zsun:
+            if not densv2_obs is None: # Need to fit original data
+                kwargs['densv2_obs']= densv2_obs
             for jj in range(nmh_zsun):
                 # Do a MH step
                 zsun_new= zsun_m2m+numpy.random.normal()*sig_zsun
                 kwargs['nstep']= nstep_zsun+3
                 dum= fit_m2m(tout[0],z_m2m,vz_m2m,omega_m2m,zsun_new,
-                             z_obs,tdens_obs,dens_obs_noise,
+                             z_obs,dens_obs,dens_obs_noise,
                              **kwargs)
                 kwargs['nstep']= nstep
                 acc= -numpy.mean(\
@@ -521,12 +524,15 @@ def sample_m2m(nsamples,
                 if acc > numpy.log(numpy.random.uniform()):
                     zsun_m2m= zsun_new
                     tQ= dum[1]
+                    nacc+= 1
             zsun_out[ii]= zsun_m2m
         w_out[ii]= tout[0]
         Q_out[ii]= tQ[-1]
         # Update orbits
         z_m2m, vz_m2m= Aphi_to_zvz(A_init,
-                                   phi_init+omega_m2m*kwargs.get('nstep',1000)\
+                                   phi_init+omega_m2m\
+                                       *(kwargs.get('nstep',1000)
+                                         +nstep_zsun)\
                                        *kwargs.get('step',0.001)*(ii+1),
                                    omega_m2m)
         z_out[ii]= z_m2m
@@ -534,6 +540,8 @@ def sample_m2m(nsamples,
     out= (w_out,)
     if fit_zsun: out= out+(zsun_out,)
     out= out+(Q_out,z_out,vz_out,)
+    if fit_zsun: print("MH acceptance ratio for zsun was %.2f" \
+                           % (nacc/float(nmh_zsun*nsamples)))
     return out
 
 
