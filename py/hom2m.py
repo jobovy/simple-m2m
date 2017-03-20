@@ -206,8 +206,8 @@ def force_of_change_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
 
 # zsun
 def force_of_change_zsun(w_m2m,zsun_m2m,z_m2m,vz_m2m,
-                         z_obs,dens_obs_noise,
-                         delta_m2m,
+                         z_obs,dens_obs_noise,delta_m2m,
+                         densv2_obs_noise,deltav2_m2m,
                          kernel_deriv=epanechnikov_kernel_deriv,
                          h_m2m=0.02):
     """Computes the force of change for zsun"""
@@ -215,7 +215,9 @@ def force_of_change_zsun(w_m2m,zsun_m2m,z_m2m,vz_m2m,
     for jj,zo in enumerate(z_obs):
         dWij= kernel_deriv(numpy.fabs(zo-z_m2m+zsun_m2m),h_m2m)\
             *numpy.sign(zo-z_m2m+zsun_m2m)
-        out+= delta_m2m[jj]/dens_obs_noise[jj]*numpy.sum(w_m2m*dWij)
+        out+= delta_m2m[jj]/dens_obs_noise[jj]*numpy.sum(w_m2m*dWij)\
+            +deltav2_m2m[jj]/densv2_obs_noise[jj]\
+            *numpy.sum(w_m2m*vz_m2m**2.*dWij)
     return -out
 
 ################################ M2M OPTIMIZATION #############################
@@ -351,8 +353,8 @@ def fit_m2m(w_init,z_init,vz_init,
     fcz= 0.
     if fit_zsun:
         fcz= force_of_change_zsun(w_init,zsun_m2m,z_init,vz_init,
-                                  z_obs,dens_obs_noise,
-                                  delta_m2m_new,
+                                  z_obs,dens_obs_noise,delta_m2m_new,
+                                  densv2_obs_noise,deltav2_m2m_new,
                                   kernel_deriv=kernel_deriv,h_m2m=h_m2m)
     if not smooth is None:
         delta_m2m= delta_m2m_new
@@ -412,9 +414,10 @@ def fit_m2m(w_init,z_init,vz_init,
         if fit_zsun:
             if smooth is None or not st96smooth:
                 tdelta_m2m= delta_m2m_new
+                tdeltav2_m2m= deltav2_m2m_new
             fcz_new= force_of_change_zsun(w_out,zsun_m2m,z_m2m,vz_m2m,
-                                          z_obs,dens_obs_noise,
-                                          tdelta_m2m,
+                                          z_obs,dens_obs_noise,tdelta_m2m,
+                                          densv2_obs_noise,tdeltav2_m2m,
                                           kernel_deriv=kernel_deriv,
                                           h_m2m=h_m2m)
         # Increment smoothing
