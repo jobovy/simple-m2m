@@ -1,6 +1,6 @@
 
 #
-# read output from dens1d_fstar.py and run hom2m
+# read output from densv2m1d_fstar_sample.py and run hom2m
 #
 
 import pyfits
@@ -22,55 +22,26 @@ import matplotlib.pyplot as plt
 
 numpy.random.seed(4)
 
-# input parameters
-# We only observe the density at a few z
-# z_obs= numpy.array([0.075,0.1,0.125,0.15,0.175,0.2,-0.075,-0.1,-0.125,-0.15,-0.175,-0.2])
-z_obs= numpy.array([0.0,0.025,0.05,0.075,0.1,0.125,0.15,0.175,-0.025,-0.05,-0.075,-0.1,-0.125,-0.15,-0.175])
-h_obs= 0.075
+# for observed density
+# input file data
+infile='cylinder_dens.fits'
+rstar_hdulist=pyfits.open(infile)
+rstar=rstar_hdulist[1].data
+h_obs=rstar_hdulist[0].header['h_obs']
+print 'h_obs=',h_obs
+rstar_hdulist.close()
+
+# set z_obs and density
+z_obs=rstar['z_obs']
+dens_obs=rstar['dens_obs']
+dens_obs_noise=rstar['dens_obs_noise']
+
 h_m2m= h_obs
 
-# print input parameters
-
-# input selected stellar data
-infile='selstars_xyz.fits'
-rstar_hdus=pyfits.open(infile)
-rstar=rstar_hdus[1].data
-rstar_hdus.close()
-
-# read the data
-# number of data points
-z_mock=rstar['zpos']
-n_mock=len(z_mock)
-
-print 'number of selected stars for density =',n_mock
-
-# bovy_plot.bovy_hist(numpy.fabs(z_mock),bins=11,normed=True,
-#                    xlabel=r'$z$',ylabel=r'$\nu(z)$',lw=2.,histtype='step')
-# pylab.gca().set_yscale('log')
-# plt.show()
-#plt.savefig('dens_hist.jpg')
-
-# for observed density
 # the input data has "unknown" zoffset so no need for z offset
 zoff_obs=0.0
-dens_obs= compute_dens(z_mock,zoff_obs,z_obs,h_obs)
-def compute_nsbin(z,zsun,z_obs,h_obs,w=None):
-    if w is None: w= numpy.ones_like(z)
-    nsbin= numpy.zeros_like(z_obs)
-    for jj,zo in enumerate(z_obs):
-       nsbin[jj]+= numpy.sum(w[numpy.fabs(zo-z+zsun)<1.0*h_obs])
-    return nsbin
-# poisson error
-nsbin_obs=compute_nsbin(z_mock,zoff_obs,z_obs,h_obs)
-print ' Ns bin for density=',nsbin_obs
-dens_obs_noise= dens_obs/numpy.sqrt(nsbin_obs)
 print ' dens =',dens_obs
 print ' dens uncertainty =',dens_obs_noise
-
-# dens_obs_noise= numpy.sqrt(dens_obs)*0.2*numpy.sqrt(numpy.amax(dens_obs))\
-#    /(numpy.fabs(z_obs**2)/numpy.amin(numpy.fabs(z_obs**2)))
-# observation already has a noise
-# dens_obs+= numpy.random.normal(size=dens_obs.shape)*dens_obs_noise
 
 # bovy_plot.bovy_print(axes_labelsize=17.,text_fontsize=12.,xtick_labelsize=15.,ytick_labelsize=15.)
 # plt.figure(figsize(6,4))
@@ -81,73 +52,43 @@ print ' dens uncertainty =',dens_obs_noise
 # plt.show()
 
 ### read the velocity data
-infile='selstars_xyzvz.fits'
-rstar_hdus=pyfits.open(infile)
-rstar=rstar_hdus[1].data
-rstar_hdus.close()
+# input file data
+infile='cylinder_v2m.fits'
+rstar_hdulist=pyfits.open(infile)
+rstar=rstar_hdulist[1].data
+h_obs_v2m=rstar_hdulist[0].header['h_obs']
+if h_obs_v2m!=h_obs:
+  print 'h_obs_v2m is not consistent with h_obs! h_obs_v2m=',h_obs_v2m
+  sys.exit()
+rstar_hdulist.close()
 
-# read the data
-# number of data points
-z_vmock=rstar['zpos']
-vz_vmock=rstar['velz']
-n_vmock=len(z_vmock)
+# set z_obs and density
+z_obsv2m=rstar['z_obs']
+if numpy.all(numpy.not_equal(z_obsv2m,z_obs)):
+  print 'z_obsv2m is not consistent with z_obs!'
+  print ' z_obs, z_obsv2m=',z_obs,z_obsv2m
+  sys.exit()
+v2m_obs=rstar['v2m_obs']
+v2m_obs_noise=rstar['v2m_obs_noise']
+print '<v^2>^1/2=',numpy.sqrt(v2m_obs)
+print '<v^2>_unc^1/2=',numpy.sqrt(v2m_obs_noise)
 
-print 'number of selected stars for <v^2> =',n_vmock
 # vz for Sun from Schoenrich et al. 2010
 vzsun=7.25
-
-# for observed <v^2>
-# relative to sun
-vz_vmock=vz_vmock+vzsun
-v2m_obs= compute_v2m(z_vmock,vz_vmock,zoff_obs,z_obs,h_obs)
-nsbin_obs=compute_nsbin(z_vmock,zoff_obs,z_obs,h_obs)
-print ' Ns bin for <v^2>=',nsbin_obs
-v2m_obs_noise= v2m_obs/numpy.sqrt(nsbin_obs)
-print ' <v^2> =',v2m_obs
-print ' v^2 errors=',v2m_obs_noise
-vmean=numpy.zeros_like(z_obs)
-for jj,zo in enumerate(z_obs):
-    vmean[jj]= numpy.sum(kernel(numpy.fabs(zo-z_vmock+zoff_obs),h_obs)*vz_vmock) \
-         /numpy.sum(kernel(numpy.fabs(zo-z_vmock+zoff_obs),h_obs))
-print ' <v>bin =',vmean
-
-# another way of setting noise and v2m
-# compute <v>
-def compute_vm(z,vz,zsun,z_obs,h_obs,w=None):
-    if w is None: w= numpy.ones_like(z)
-    vm= numpy.zeros_like(z_obs)
-    for jj,zo in enumerate(z_obs):
-        vm[jj]= numpy.sum(w*kernel(numpy.fabs(zo-z+zsun),h_obs)*vz) \
-          /numpy.sum(w*kernel(numpy.fabs(zo-z+zsun),h_obs))
-    return vm
-v2m_obs= compute_v2m(z_vmock,vz_vmock,zoff_obs,z_obs,h_obs)
-vm_obs= compute_vm(z_vmock,vz_vmock,zoff_obs,z_obs,h_obs)
-nsbin_obs=compute_nsbin(z_vmock,zoff_obs,z_obs,h_obs)
-print ' Ns bin for <v^2>=',nsbin_obs
-print ' <v^2> =',v2m_obs
-print ' <v> =',vm_obs
-# set v2m as sig_z^2
-v2m_obs=(v2m_obs-vm_obs**2)
-print ' new <v^2> = sigz^2 =',v2m_obs
-# noise = (sig_z/sqrt(np))^2
-# v2m_obs_noise= v2m_obs/nsbin_obs
-# or 1/sqrt(np)
-v2m_obs_noise= v2m_obs/numpy.sqrt(nsbin_obs)
-print ' v^2 errors=',v2m_obs_noise
 
 ### initial model
 
 n_m2m= 4000
 # assume velocity km/s, distance kpc unit 
-sigma_init= 15.0
+sigma_init= 18.0
 E_m2m= numpy.random.exponential(scale=sigma_init**2.,size=n_m2m)
 phi_m2m= numpy.random.uniform(size=n_m2m)*2.*numpy.pi
 # although it is guess
 # scale with 220 km/s and 8 kpc
-sigma_true=15.0
+sigma_true=sigma_init
 # omega = sqrt(2)x(v (km/s))/z (kpc)
-# from hom2m-omega
 omega_true= 122.0
+print 'omega_true=',omega_true
 A_m2m= numpy.sqrt(2.*E_m2m)/omega_true
 w_init= numpy.ones(n_m2m)
 z_m2m= A_m2m*numpy.cos(phi_m2m)
@@ -214,7 +155,7 @@ bovy_plot.bovy_print(axes_labelsize=17.,text_fontsize=12.,xtick_labelsize=15.,yt
 plt.subplot(2,3,1)
 bovy_plot.bovy_plot(z_out,dens_init,'-',semilogy=True,
   xlabel=r'$\tilde{z}$',ylabel=r'$\nu_{\mathrm{obs}}(\tilde{z})$',
-  xrange=[-.25,0.25],yrange=[0.1,10.],gcf=True)
+  xrange=[-.25,0.25],yrange=[0.0,10.],gcf=True)
 bovy_plot.bovy_plot(z_obs,dens_obs,'o',semilogy=True,overplot=True)
 bovy_plot.bovy_plot(z_out,dens_final,'-',semilogy=True,overplot=True,zorder=0)
 plt.errorbar(z_obs,dens_obs,yerr=dens_obs_noise,marker='None',ls='none',color=sns.color_palette()[1])
@@ -250,11 +191,11 @@ bovy_plot.bovy_plot(numpy.linspace(0.,1.,nstep)*nstep*step*omega_true/2./numpy.p
                    loglog=True,xlabel=r'$\mathrm{orbits}$',ylabel=r'$F$',gcf=True)
 plt.subplot(2,3,6)
 _= plt.hist(vz_m2m,weights=w_out,histtype='step',lw=2.,normed=True,bins=31,zorder=1)
-_= plt.hist(vz_vmock,histtype='step',lw=2.,normed=True,bins=31,zorder=2)
+#_= plt.hist(vz_vmock,histtype='step',lw=2.,normed=True,bins=31,zorder=2)
 _= plt.hist(vz_m2m,histtype='step',lw=2.,normed=True,bins=31,ls='--',zorder=0)
 plt.xlabel(r'$v_z$')
 plt.ylabel(r'$p(v_z)$')
-print("Velocity dispersions: mock, fit",numpy.std(vz_vmock),\
+print("Velocity dispersions: fit", \
       numpy.sqrt(numpy.sum(w_out*(vz_m2m-numpy.sum(w_out*vz_m2m)/numpy.sum(w_out))**2.)/numpy.sum(w_out)))
 
 # plt.tight_layout()
@@ -295,13 +236,13 @@ plt.yscale('log',nonposy='clip')
 #
 plt.subplot(2,3,2)
 v2m_final= compute_v2m(z_m2m,vz_m2m,zsun_guess,z_out,h_obs,w_out)
-bovy_plot.bovy_plot(z_out,numpy.sqrt(v2m_init),'-',semilogy=False,
+bovy_plot.bovy_plot(z_out,numpy.sqrt(v2m_init),'-',semilogy=True,
                    xlabel=r'$\tilde{z}$',ylabel=r'$\langle v^2\rangle^{1/2}$',
-                    xrange=[-.25,0.25],yrange=[0.0,50.0],gcf=True)
-bovy_plot.bovy_plot(z_obs,numpy.sqrt(v2m_obs),'o',semilogy=False,overplot=True)
-bovy_plot.bovy_plot(z_out,numpy.sqrt(v2m_final),'-',semilogy=False,overplot=True,zorder=0)
+                    xrange=[-.25,0.25],yrange=[10.0,100.0],gcf=True)
+bovy_plot.bovy_plot(z_obs,numpy.sqrt(v2m_obs),'o',semilogy=True,overplot=True)
+bovy_plot.bovy_plot(z_out,numpy.sqrt(v2m_final),'-',semilogy=True,overplot=True,zorder=0)
 plt.errorbar(z_obs,numpy.sqrt(v2m_obs),yerr=numpy.sqrt(v2m_obs_noise),marker='None',ls='none',color=sns.color_palette()[1])
-# plt.yscale('log',nonposy='clip')
+plt.yscale('log',nonposy='clip')
 #
 plt.subplot(2,3,3)
 for ii in range(len(wevol)):
@@ -316,11 +257,11 @@ bovy_plot.bovy_plot(numpy.linspace(0.,1.,nstep)*nstep*step*omega_m2m/2./numpy.pi
 # no plot for vz
 plt.subplot(2,3,5)
 _= plt.hist(vz_m2m,weights=w_out,histtype='step',lw=2.,normed=True,bins=31,zorder=1)
-_= plt.hist(vz_vmock,histtype='step',lw=2.,normed=True,bins=31,zorder=2)
+# _= plt.hist(vz_vmock,histtype='step',lw=2.,normed=True,bins=31,zorder=2)
 _= plt.hist(vz_m2m,histtype='step',lw=2.,normed=True,bins=31,ls='--',zorder=0)
 plt.xlabel(r'$v_z$')
 plt.ylabel(r'$p(v_z)$')
-print("Velocity dispersions: mock, fit",numpy.std(vz_vmock),\
+print("Velocity dispersions: fit", \
       numpy.sqrt(numpy.sum(w_out*(vz_m2m-numpy.sum(w_out*vz_m2m)/numpy.sum(w_out))**2.)/numpy.sum(w_out)))
 #
 plt.subplot(2,3,6)

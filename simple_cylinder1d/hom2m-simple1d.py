@@ -8,8 +8,8 @@ import math
 import numpy
 import copy
 import sys
-sys.path.append('../py')
-from hom2m import *
+# sys.path.append('../py')
+from hom2m_sc1d import *
 # import matplotlib.pyplot as plt
 from scipy import stats
 from galpy.util import bovy_coords

@@ -95,4 +95,55 @@ def simplex_to_Rn_derivs(dx,jac):
     HISTORY:
        2017-02-22 - Written - Bovy (UofT/CCA)
     """
-    return numpy.dot(jac,dx)
+    return numpy.dot(jac.T,dx)
+
+def simplex_to_Rn_derivs_fast(y,dx,add_dlogdet=False):
+    """
+    NAME:
+       simplex_to_Rn_derivs_fast
+    PURPOSE:
+       transform derivatives wrt the simplex (d / d x) to derivatives with respect to the R^N-1 variables in a fast manner
+    INPUT:
+       y \in R^n
+       dx - derivatives with respect to the simplex
+       add_dlogdet= (False) if True, add the derivative of the log of the determinant of the Jacobian wrt y
+    OUTPUT:
+       derivatives wrt y
+    HISTORY:
+       2017-02-23 - Written - Bovy (UofT/CCA)
+    """
+    w, x= Rn_to_simplex(y,_retz=True)
+    out= numpy.cumsum((w*dx)[::-1])[::-1]
+    out= out[1:]*(1.-x)-x*(w*dx)[:-1]
+    if add_dlogdet: out+= (len(x)-numpy.arange(len(x)))*(1.-x)-x
+    return out
+
+def simplex_to_Rn_hessian(y,hess,add_dlogdet=False):
+    """
+    NAME:
+       simplex_to_Rn_hessian
+    PURPOSE:
+       transform the Hessian wrt the simplex (d^ / d x_1 d x_2) to the diagonal of the Hessian wrt the R^N-1 variables in a fast manner
+    INPUT:
+       y \in R^n
+       hess - Hessian wrt the simplex; if 1D, assumed to be the diagonal in the approximation that the Hessian is diagonal on the simplex)
+       add_dlogdet= (False) if True, add minus the 2nd derivative of the log of the determinant of the Jacobian wrt y
+    OUTPUT:
+       diagonal of the Hessian
+    HISTORY:
+       2017-02-23 - Written - Bovy (UofT/CCA)
+    """
+    w, x= Rn_to_simplex(y,_retz=True)
+    if len(hess.shape) == 1:
+        # Assumed diagonal
+        out= numpy.cumsum((w**2.*hess)[::-1])[::-1]
+        out= out[1:]*(1.-x)**2.+x**2.*(w**2.*hess)[:-1]
+    else:
+        out= x**2.*w[:-1]**2.*numpy.diagonal(hess)[:-1]
+        hessw2= ((hess*w).T*w.T).T
+        tmp= numpy.cumsum(hessw2[::-1],axis=0)[::-1]
+        out+= -2.*x*(1.-x)*numpy.diagonal(tmp[1:,:-1])
+        out+= (1.-x)**2.\
+            *numpy.diagonal(numpy.cumsum(tmp[:,::-1],axis=1)[:,::-1])[1:]
+    if add_dlogdet: out+= (len(x)-numpy.arange(len(x))+1)*x*(1.-x)
+    return out
