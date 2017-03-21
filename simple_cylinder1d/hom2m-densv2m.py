@@ -186,7 +186,7 @@ plt.show()
 step= numpy.pi/3.*10.**-2.
 step=0.2
 nstep= 10000
-eps= 10.**-4.
+eps= 10.**-6.
 # x n_m2m, because density is normalised with n, somehow this is better
 eps_vel= eps*n_m2m
 # eps_vel= eps
@@ -264,7 +264,7 @@ plt.show()
 
 step= numpy.pi/20.0
 nstep= 40000
-eps= 10.**-4.
+eps= 10.**-6.
 eps_zo= eps/100.
 mu= 1.
 omega_m2m= omega_true

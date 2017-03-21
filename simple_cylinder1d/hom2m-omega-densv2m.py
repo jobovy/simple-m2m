@@ -141,18 +141,19 @@ f.close()
 # estimated zsun from above
 # zsun_obs=zsun_out[-1]
 # zsun_obs=0.018
-zsun_obs=0.021
+# zsun_obs=0.011
+zsun_obs=0.0090
 print 'zsun_obs set =',zsun_obs
 
 n_m2m= 4000
 # assume velocity km/s, distance kpc unit 
-sigma_init= 15.0
+sigma_init= 16.3
 # although it is guess
 # scale with 220 km/s and 8 kpc
-sigma_true=15.0
+sigma_true=sigma_init
 # omega = sqrt(2)x(v (km/s))/z (kpc)
-omega_true= 1.4*15.0/0.2-10.0
-# omega_true= 70.0
+# omega_true= 1.4*15.0/0.2-10.0
+omega_true= 70.0
 omega_m2m=omega_true
 E_m2m= numpy.random.exponential(scale=sigma_init**2.,size=n_m2m)
 phi_m2m_omega= numpy.random.uniform(size=n_m2m)*2.*numpy.pi
@@ -190,7 +191,6 @@ plt.show()
 ### run M2M with variable omega using a fixed zsun
 step=numpy.pi/20.0
 nstep= 10000
-eps= 10.**-4
 eps_vel= eps*n_m2m
 eps_omega= eps*100.0
 skipomega= 40

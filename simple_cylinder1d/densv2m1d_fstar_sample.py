@@ -34,10 +34,11 @@ bvtcolmax=0.587
 hrverrlim=10.0
 hrvlim=200.0
 # number of error sampling 
-nsamp=10
+nsamp=100
 
 # radius of a cylinder for density calculation (kpc)
-rxylim=0.1
+# rxylim=0.1
+rxylim=0.2
 # nbin and z range max and min for North (_n) and South (_s)
 # z_obs= numpy.array([0.075,0.1,0.125,0.15,0.175,-0.075,-0.1,-0.125,-0.15,-0.175])
 z_obs= numpy.array([0.0,0.025,0.05,0.075,0.1,0.125,0.15,0.175,-0.025,-0.05,-0.075,-0.1,-0.125,-0.15,-0.175])
@@ -110,13 +111,13 @@ while isamp<nsamp:
   bt_ps=bt_mcs[psindx]
 
 # for check
-  file_plx='plx_sample'+str(isamp)+'.asc'
-  f=open(file_plx,'w')
-  i=0
-  while i < len(psindx[0]):
-    print >>f, "%f %f %f" %(plx0_ps[i],plx_ps[i],eplx_ps[i])
-    i+=1
-  f.close()
+#  file_plx='plx_sample'+str(isamp)+'.asc'
+#  f=open(file_plx,'w')
+#  i=0
+#  while i < len(psindx[0]):
+#    print >>f, "%f %f %f" %(plx0_ps[i],plx_ps[i],eplx_ps[i])
+#    i+=1
+#  f.close()
 
 # calculate x,y,z coordinate
 # ra,dec -> glon
@@ -165,14 +166,13 @@ while isamp<nsamp:
 #  print ' z,dens=',z_obs,dens_obs
 
 # output ascii data for test
-  file_cs='cylinder_dens'+str(isamp)+'.asc'
-  f=open(file_cs,'w')
-  i=0
-  while i < len(z_obs):
-    print >>f, "%f %f" %(z_obs[i],dens_obs[i])
-    i+=1
-  f.close()
-
+#  file_cs='cylinder_dens'+str(isamp)+'.asc'
+#  f=open(file_cs,'w')
+#  i=0
+#  while i < len(z_obs):
+#    print >>f, "%f %f" %(z_obs[i],dens_obs[i])
+#    i+=1
+#  f.close()
 
   isamp+=1
 
@@ -366,6 +366,9 @@ while isamp<nsamp:
 #        ,vlat_cs[i],logg_cs[i])
 #    i+=1
 #  f.close()
+  if isamp==0:
+    print ' mean velocity errors Vhel,Vra,Vdec=',np.mean(hrverr_cs) \
+     ,np.mean(pmraerr_cs),np.mean(pmdecerr_cs)
 
   v2m_obs= compute_v2m(zpos_cs,velz_cs,zoff_obs,z_obs,h_obs)
   vm_obs= compute_vm(zpos_cs,velz_cs,zoff_obs,z_obs,h_obs)
