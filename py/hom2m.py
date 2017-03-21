@@ -220,6 +220,38 @@ def force_of_change_zsun(w_m2m,zsun_m2m,z_m2m,vz_m2m,
             *numpy.sum(w_m2m*vz_m2m**2.*dWij)
     return -out
 
+# omega
+
+# Function that returns the difference in z and vz for orbits starting at the 
+# same (z,vz)_init integrated in potentials with different omega
+def zvzdiff(z_init,vz_init,omega1,omega2,t):
+    A1, phi1= zvz_to_Aphi(z_init,vz_init,omega1)
+    A2, phi2= zvz_to_Aphi(z_init,vz_init,omega2)
+    return (A2*numpy.cos(omega2*t+phi2)-A1*numpy.cos(omega1*t+phi1),
+           -A2*omega2*numpy.sin(omega2*t+phi2)\
+                +A1*omega1*numpy.sin(omega1*t+phi1)) 
+
+def force_of_change_omega(w_m2m,zsun_m2m,omega_m2m,
+                          z_m2m,vz_m2m,z_prev,vz_prev,
+                          step,z_obs,dens_obs,dens_obs_noise,delta_m2m,
+                          densv2_obs,densv2_obs_noise,deltav2_m2m,
+                          h_m2m=0.02,kernel=epanechnikov_kernel,
+                          delta_omega=0.3):
+    """Compute the force of change by direct finite difference 
+    of the objective function"""
+    dz, dvz= zvzdiff(z_prev,vz_prev,omega_m2m,omega_m2m+delta_omega,step)
+    fcw, delta_m2m_do, deltav2_m2m_do= force_of_change_weights(\
+        w_m2m,zsun_m2m,
+        z_m2m+dz,vz_m2m+dvz,
+        z_obs,dens_obs,dens_obs_noise,
+        densv2_obs,densv2_obs_noise,
+        'entropy',0.,1., # weights prior doesn't matter, so set to zero
+        h_m2m=h_m2m,kernel=kernel)
+    return -numpy.sum(\
+        delta_m2m*(delta_m2m_do-delta_m2m)/dens_obs_noise
+        +deltav2_m2m*(deltav2_m2m_do-deltav2_m2m)/densv2_obs_noise)\
+        /delta_omega
+
 ################################ M2M OPTIMIZATION #############################
 def precalc_kernel(z_init,vz_init,
                    omega_m2m,zsun_m2m,
@@ -273,7 +305,8 @@ def fit_m2m(w_init,z_init,vz_init,
             h_m2m=0.02,
             smooth=None,st96smooth=False,schwarzschild=False,
             output_wevolution=False,
-            fit_zsun=False):
+            fit_zsun=False,fit_omega=False,
+            skipomega=10,delta_omega=0.3):
     """
     NAME:
        fit_m2m
@@ -292,11 +325,14 @@ def fit_m2m(w_init,z_init,vz_init,
        densv2_obs_noise= (None) noise in the observed densities x velocity-squareds
        step= stepsize of orbit integration
        nstep= number of steps to integrate the orbits for
-       eps= M2M epsilon parameter (can be array when fitting zsun, omega; in that case eps[0] = eps_weights, eps[1] = eps_zsun, eps[2] = eps_omega)
+       eps= M2M epsilon parameter (can be array when fitting zsun, omega; in that case eps[0] = eps_weights, eps[1] = eps_zsun, eps[1 or 2 based on fit_zsun] = eps_omega)
        mu= M2M entropy parameter mu
        prior= ('entropy' or 'gamma')
        w_prior= (None) prior weights (if None, equal to w_init)
        fit_zsun= (False) if True, also optimize zsun
+       fit_omega= (False) if True, also optimize omega
+       skipomega= only update omega every skipomega steps
+       delta_omega= (0.3) difference in omega to use to compute derivative of objective function wrt omega
        kernel= a smoothing kernel
        kernel_deriv= the derivative of the smoothing kernel
        h_m2m= kernel size parameter for computing the observables
@@ -305,9 +341,12 @@ def fit_m2m(w_init,z_init,vz_init,
        schwarzschild= (False) if True, first compute orbit-averaged kernels and use those rather than the point-estimates [only for basic weights fit]
        output_wevolution= if set to an integer, return the time evolution of this many randomly selected weights
     OUTPUT:
-       (w_out,[zsun_out],Q_out,[wevol,rndindx]) - 
+       (w_out,[zsun_out, [omega_out]],Q_out,[wevol,rndindx]) - 
               (output weights [N],
               [Solar offset [nstep] optional],
+              [omega [nstep] optional when fit_omega],
+              [z_m2m [N] final z, optional when fit_omega],
+              [vz_m2m [N] final vz, optional when fit_omega],
               objective function as a function of time [nstep],
               [weight evolution for randomly selected weights,index of random weights])
     HISTORY:
@@ -317,23 +356,29 @@ def fit_m2m(w_init,z_init,vz_init,
        2017-02-22 - Refactored to more general function - Bovy (UofT/CCA)
        2017-02-27 - Add st96smooth option and make Dehnen smoothing the default - Bovy (UofT/CCA)
        2017-03-17 - Added zsun fit - Bovy (CCA/UofT)
+       2017-03-21 - Added omega fit - Bovy (CCA/UofT)
     """
     w_out= copy.deepcopy(w_init)
     zsun_out= numpy.empty(nstep)
+    omega_out= numpy.empty(nstep)
     if w_prior is None:
         w_prior= w_init
     # Parse eps
     if isinstance(eps,float):
         eps= [eps]
         if fit_zsun: eps.append(eps[0])
+        if fit_omega: eps.append(eps[0])
     Q_out= []
     A_init, phi_init= zvz_to_Aphi(z_init,vz_init,omega_m2m)
+    A_now= copy.copy(A_init)
+    phi_now= copy.copy(phi_init)
     if output_wevolution:
         rndindx= numpy.random.permutation(len(w_out))[:output_wevolution]
         wevol= numpy.zeros((output_wevolution,nstep))
     # Use orbit-averaged weights?
     if schwarzschild:
         if fit_zsun: raise NotImplementedError('Schwarzschild-like fitting is only implemented for the basic weights fit, not with fit_zsun=True')
+        if fit_omega: raise NotImplementedError('Schwarzschild-like fitting is only implemented for the basic weights fit, not with fit_omega=True')
         Kij, Kvz2ij= precalc_kernel(z_init,vz_init,
                                     omega_m2m,zsun_m2m,
                                     z_obs,step=step,nstep=nstep,
@@ -367,6 +412,10 @@ def fit_m2m(w_init,z_init,vz_init,
             Q= numpy.hstack((delta_m2m**2.,deltav2_m2m**2.))
         else:
             Q= delta_m2m**2.
+    # setup skipomega omega counter and prev. (z,vz) for F(omega)
+    ocounter= skipomega-1 # Causes F(omega) to be computed in the 1st step
+    z_prev, vz_prev= Aphi_to_zvz(A_init,phi_init-skipomega*step*omega_m2m,
+                                 omega_m2m) #Rewind for first step
     for ii in range(nstep):
         # Update weights first
         w_out+= eps[0]*step*fcw
@@ -375,6 +424,16 @@ def fit_m2m(w_init,z_init,vz_init,
         if fit_zsun: 
             zsun_m2m+= eps[1]*step*fcz 
             zsun_out[ii]= zsun_m2m
+        # then omega (skipped in the first step, so undeclared vars okay)
+        if fit_omega and ocounter == skipomega:
+            domega= eps[1+fit_zsun]*step*skipomega*fco
+            max_domega= delta_omega/30.
+            if numpy.fabs(domega) > max_domega:
+                domega= max_domega*numpy.sign(domega)
+            omega_m2m+= domega
+            # Keep (z,vz) the same in new potential
+            A_now, phi_now= zvz_to_Aphi(z_m2m,vz_m2m,omega_m2m)
+            ocounter= 0
         # (Store objective function)
         if not smooth is None and st96smooth:
             if not densv2_obs is None:
@@ -390,9 +449,8 @@ def fit_m2m(w_init,z_init,vz_init,
             else:
                 Q_out.append(delta_m2m_new**2.)
         # Then update force
-        phi_now= omega_m2m*ii*step+phi_init
-        z_m2m= A_init*numpy.cos(phi_now)
-        vz_m2m= -A_init*omega_m2m*numpy.sin(phi_now)
+        phi_now+= omega_m2m*step
+        z_m2m, vz_m2m= Aphi_to_zvz(A_now,phi_now,omega_m2m)
         # Compute force of change
         if smooth is None or not st96smooth:
             # Turn these off
@@ -420,12 +478,32 @@ def fit_m2m(w_init,z_init,vz_init,
                                           densv2_obs_noise,tdeltav2_m2m,
                                           kernel_deriv=kernel_deriv,
                                           h_m2m=h_m2m)
+        if fit_omega:
+            omega_out[ii]= omega_m2m
+            # Update omega in this step?
+            ocounter+= 1
+            if ocounter == skipomega:
+                if not fit_zsun and (smooth is None or not st96smooth):
+                    tdelta_m2m= delta_m2m_new
+                    tdeltav2_m2m= deltav2_m2m_new
+                fco_new= force_of_change_omega(w_out,zsun_m2m,omega_m2m,
+                                               z_m2m,vz_m2m,z_prev,vz_prev,
+                                               step*skipomega,
+                                               z_obs,dens_obs,dens_obs_noise,
+                                               tdelta_m2m,
+                                               densv2_obs,densv2_obs_noise,
+                                               tdeltav2_m2m,
+                                               h_m2m=h_m2m,kernel=kernel,
+                                               delta_omega=delta_omega)
+                z_prev= copy.copy(z_m2m)
+                vz_prev= copy.copy(vz_m2m)
         # Increment smoothing
         if not smooth is None and st96smooth:
             delta_m2m+= step*smooth*(delta_m2m_new-delta_m2m)
             deltav2_m2m+= step*smooth*(deltav2_m2m_new-deltav2_m2m)
             fcw= fcw_new
             if fit_zsun: fcz= fcz_new
+            if fit_omega and ocounter == skipomega: fco= fco_new
         elif not smooth is None:
             if not densv2_obs is None:
                 Q_new= numpy.hstack((delta_m2m_new**2.,deltav2_m2m_new**2.))
@@ -434,14 +512,20 @@ def fit_m2m(w_init,z_init,vz_init,
             Q+= step*smooth*(Q_new-Q)
             fcw+= step*smooth*(fcw_new-fcw)
             if fit_zsun: fcz+= step*smooth*(fcz_new-fcz)
+            if fit_omega and ocounter == skipomega:
+                fco+= step*skipomega*smooth*(fco_new-fco)
         else:
             fcw= fcw_new
             if fit_zsun: fcz= fcz_new
+            if fit_omega and ocounter == skipomega: fco= fco_new
         # Record random weights if requested
         if output_wevolution:
             wevol[:,ii]= w_out[rndindx]
     out= (w_out,)
     if fit_zsun: out= out+(zsun_out,)
+    if fit_omega:
+        out= out+(omega_out,)
+        out= out+Aphi_to_zvz(A_now,phi_now,omega_m2m)
     out= out+(numpy.array(Q_out),)
     if output_wevolution:
         out= out+(wevol,rndindx,)
