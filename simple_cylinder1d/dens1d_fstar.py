@@ -30,13 +30,14 @@ hrverrlim=10.0
 hrvlim=100.0
 
 # radius of a cylinder for density calculation (kpc)
-rxylim=0.1
+# rxylim=0.1
+rxylim=0.2
 # nbin and z range max and min for North (_n) and South (_s)
 nbin_n=5
 zmin_n=0.0
-zmax_n=0.2
+zmax_n=0.25
 nbin_s=5
-zmin_s=-0.2
+zmin_s=-0.25
 zmax_s=0.0
 
 # print input parameters

@@ -72,6 +72,8 @@ v2m_obs=rstar['v2m_obs']
 v2m_obs_noise=rstar['v2m_obs_noise']
 print '<v^2>^1/2=',numpy.sqrt(v2m_obs)
 print '<v^2>_unc^1/2=',numpy.sqrt(v2m_obs_noise)
+print '<v^2>=',v2m_obs
+print '<v^2>_unc=',v2m_obs_noise
 
 # vz for Sun from Schoenrich et al. 2010
 vzsun=7.25
@@ -80,14 +82,15 @@ vzsun=7.25
 
 n_m2m= 4000
 # assume velocity km/s, distance kpc unit 
-sigma_init= 18.0
+sigma_init= 16.4
 E_m2m= numpy.random.exponential(scale=sigma_init**2.,size=n_m2m)
 phi_m2m= numpy.random.uniform(size=n_m2m)*2.*numpy.pi
 # although it is guess
 # scale with 220 km/s and 8 kpc
 sigma_true=sigma_init
 # omega = sqrt(2)x(v (km/s))/z (kpc)
-omega_true= 122.0
+# omega_true= 70.0
+omega_true=133.2
 print 'omega_true=',omega_true
 A_m2m= numpy.sqrt(2.*E_m2m)/omega_true
 w_init= numpy.ones(n_m2m)
@@ -95,7 +98,7 @@ z_m2m= A_m2m*numpy.cos(phi_m2m)
 z_out= numpy.linspace(-0.3,0.3,101)
 vz_m2m= -omega_true*A_m2m*numpy.sin(phi_m2m)
 # use zsun guess
-zsun_guess=0.025
+zsun_guess=0.01
 dens_init= compute_dens(z_m2m,zsun_guess,z_out,h_m2m,w_init)
 v2m_init= compute_v2m(z_m2m,vz_m2m,zsun_guess,z_out,h_m2m,w_init)
 
@@ -127,10 +130,10 @@ plt.show()
 step= numpy.pi/3.*10.**-2.
 step=0.2
 nstep= 10000
-eps= 10.**-4.
+eps= 10.**-6.
 # x n_m2m, because density is normalised with n, somehow this is better
-eps_vel= eps*n_m2m
-# eps_vel= eps
+# eps_vel= eps*n_m2m
+eps_vel= eps*10.0
 mu= 1.
 h_m2m= h_obs
 nodens= False
@@ -204,8 +207,8 @@ plt.show()
 ### run M2M with variable zsun
 
 step= numpy.pi/20.0
-nstep= 40000
-eps= 10.**-4.
+nstep= 10000
+eps= 10.**-6.
 eps_zo= eps/100.
 mu= 1.
 omega_m2m= omega_true
@@ -271,6 +274,5 @@ plt.axhline(zsun_guess,color=sns.color_palette()[1],lw=2.,zorder=0)
 #print("Velocity dispersions: mock, fit",numpy.std(vz_vmock),\
 #      numpy.sqrt(numpy.sum(w_out*(vz_m2m-numpy.sum(w_out*vz_m2m)/numpy.sum(w_out))**2.)/numpy.sum(w_out)))
 # plt.tight_layout()
-print("Zsun: fit, starting point",zsun_out[-1],zsun_m2m)
 plt.show()
 
