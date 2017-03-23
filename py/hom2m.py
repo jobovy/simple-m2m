@@ -562,6 +562,7 @@ def sample_m2m(nsamples,
     w_out= numpy.empty((nsamples,nw))
     z_out= numpy.empty_like(w_out)
     vz_out= numpy.empty_like(w_out)
+    eps= kwargs.get('eps',0.1)
     nstep= kwargs.get('nstep',1000)
     # zsun
     fit_zsun= kwargs.get('fit_zsun',False)
@@ -593,7 +594,7 @@ def sample_m2m(nsamples,
         tout= fit_m2m(kwargs['w_prior'],z_m2m,vz_m2m,omega_m2m,zsun_m2m,
                       z_obs,tdens_obs,dens_obs_noise,
                       **kwargs)
-        tQ= tout[1]
+        tQ= tout[1] # approx. Q with final part of optimization
         if fit_zsun:
             if not densv2_obs is None: # Need to fit original data
                 kwargs['densv2_obs']= densv2_obs
@@ -601,10 +602,12 @@ def sample_m2m(nsamples,
                 # Do a MH step
                 zsun_new= zsun_m2m+numpy.random.normal()*sig_zsun
                 kwargs['nstep']= nstep_zsun+3
+                kwargs['eps']= 0. # Don't change weights
                 dum= fit_m2m(tout[0],z_m2m,vz_m2m,omega_m2m,zsun_new,
                              z_obs,dens_obs,dens_obs_noise,
                              **kwargs)
                 kwargs['nstep']= nstep
+                kwargs['eps']= eps
                 acc= -numpy.mean(\
                     numpy.sum(dum[1][-nstep_zsun:-1]-tQ[-nstep_zsun:-1],
                               axis=1))/2.
