@@ -37,9 +37,12 @@ dens_obs=rstar['dens_obs']
 dens_obs_noise=rstar['dens_obs_noise']
 
 h_m2m= h_obs
+# plot xrange
+pxrange=0.5
 
 # the input data has "unknown" zoffset so no need for z offset
 zoff_obs=0.0
+print 'z_obs=',z_obs
 print ' dens =',dens_obs
 print ' dens uncertainty =',dens_obs_noise
 
@@ -70,6 +73,7 @@ if numpy.all(numpy.not_equal(z_obsv2m,z_obs)):
   sys.exit()
 v2m_obs=rstar['v2m_obs']
 v2m_obs_noise=rstar['v2m_obs_noise']
+print '<v^2>=',v2m_obs
 print '<v^2>^1/2=',numpy.sqrt(v2m_obs)
 print '<v^2>_unc^1/2=',numpy.sqrt(v2m_obs_noise)
 
@@ -80,12 +84,12 @@ print ' Vzsun assumed=',vzsun
 ### initial model
 
 # estimated zsun from above
-zsun_obs=0.00287
+zsun_obs=-0.0016
 print 'zsun_obs set =',zsun_obs
 
 n_m2m= 4000
 # assume velocity km/s, distance kpc unit 
-sigma_init= 18.2
+sigma_init= 15.0
 # although it is guess
 # scale with 220 km/s and 8 kpc
 sigma_true=sigma_init
@@ -98,7 +102,7 @@ phi_m2m_omega= numpy.random.uniform(size=n_m2m)*2.*numpy.pi
 A_m2m_omega= numpy.sqrt(2.*E_m2m)/omega_m2m
 w_init= numpy.ones(n_m2m)
 z_m2m= A_m2m_omega*numpy.cos(phi_m2m_omega)
-z_out= numpy.linspace(-0.3,0.3,101)
+z_out= numpy.linspace(-pxrange,pxrange,101)
 dens_init= compute_dens(z_m2m,zsun_obs,z_out,h_m2m,w_init)
 vz_m2m= -omega_m2m*A_m2m_omega*numpy.sin(phi_m2m_omega)
 v2m_init= compute_v2m(z_m2m,vz_m2m,zsun_obs,z_out,h_m2m,w_init)
@@ -109,16 +113,16 @@ bovy_plot.bovy_print(axes_labelsize=17.,text_fontsize=12.,xtick_labelsize=15.,yt
 # plt.figsize(6,4)
 plt.subplot(1,2,1)
 bovy_plot.bovy_plot(z_out,dens_init,'-',semilogy=True,
-                   xlabel=r'$\tilde{z}$',ylabel=r'$\nu_{\mathrm{obs}}(\tilde{z})$',
-                   xrange=[-.25,0.25],yrange=[0.1,10.],gcf=True)
+  xlabel=r'$\tilde{z}$',ylabel=r'$\nu_{\mathrm{obs}}(\tilde{z})$',
+  xrange=[-pxrange,pxrange],yrange=[0.1,10.],gcf=True)
 bovy_plot.bovy_plot(z_obs,dens_obs,'o',semilogy=True,overplot=True)
 plt.errorbar(z_obs,dens_obs,yerr=dens_obs_noise,marker='None',ls='none',color=sns.color_palette()[1])
 plt.yscale('log',nonposy='clip')
 #
 plt.subplot(1,2,2)
 bovy_plot.bovy_plot(z_out,numpy.sqrt(v2m_init),'-',semilogy=True,
-                   xlabel=r'$\tilde{z}$',ylabel=r'$\langle v^2\rangle^{1/2}$',
-                    xrange=[-.25,0.25],yrange=[10.0,50.0],gcf=True)
+  xlabel=r'$\tilde{z}$',ylabel=r'$\langle v^2\rangle^{1/2}$',
+  xrange=[-pxrange,pxrange],yrange=[10.0,50.0],gcf=True)
 bovy_plot.bovy_plot(z_obs,numpy.sqrt(v2m_obs),'o',semilogy=True,overplot=True)
 bovy_plot.bovy_plot(z_out,numpy.sqrt(v2m_init),'-',semilogy=True,overplot=True,zorder=0)
 plt.errorbar(z_obs,numpy.sqrt(v2m_obs),yerr=numpy.sqrt(v2m_obs_noise),marker='None',ls='none',color=sns.color_palette()[1])
@@ -155,7 +159,7 @@ if True:
        eps=eps,eps_vel=eps_vel,h_m2m=h_m2m,eps_omega=eps_omega, \
        delta_omega=omega_true*0.3)
 
-z_out= numpy.linspace(-0.3,0.3,101)
+z_out= numpy.linspace(-pxrange,pxrange,101)
 dens_final= compute_dens(z_m2m,zsun_obs,z_out,h_obs,w_out)
 
 # output
@@ -169,8 +173,8 @@ bovy_plot.bovy_print(axes_labelsize=17.,text_fontsize=12.,xtick_labelsize=15.,yt
 #figsize(15,6)
 plt.subplot(2,3,1)
 bovy_plot.bovy_plot(z_out,dens_init,'-',semilogy=True,
-                   xlabel=r'$\tilde{z}$',ylabel=r'$\nu_{\mathrm{obs}}(\tilde{z})$',
-                   xrange=[-.25,0.25],yrange=[0.1,10.],gcf=True)
+  xlabel=r'$\tilde{z}$',ylabel=r'$\nu_{\mathrm{obs}}(\tilde{z})$',
+  xrange=[-pxrange,pxrange],yrange=[0.1,10.],gcf=True)
 bovy_plot.bovy_plot(z_obs,dens_obs,'o',semilogy=True,overplot=True)
 bovy_plot.bovy_plot(z_out,dens_final,'-',semilogy=True,overplot=True,zorder=0)
 plt.errorbar(z_obs,dens_obs,yerr=dens_obs_noise,marker='None',ls='none',color=sns.color_palette()[1])
@@ -178,8 +182,8 @@ plt.yscale('log',nonposy='clip')
 plt.subplot(2,3,2)
 v2m_final= compute_v2m(z_m2m,vz_m2m,zsun_obs,z_out,h_obs,w_out)
 bovy_plot.bovy_plot(z_out,v2m_init,'-',semilogy=False,
-                   xlabel=r'$\tilde{z}$',ylabel=r'$\langle v^2\rangle^{1/2}$',
-                    xrange=[-.25,0.25],yrange=[0.0,100.0],gcf=True)
+  xlabel=r'$\tilde{z}$',ylabel=r'$\langle v^2\rangle^{1/2}$',
+  xrange=[-pxrange,pxrange],yrange=[0.0,100.0],gcf=True)
 bovy_plot.bovy_plot(z_obs,numpy.sqrt(v2m_obs),'o',semilogy=False,overplot=True)
 bovy_plot.bovy_plot(z_out,numpy.sqrt(v2m_final),'-',semilogy=False,overplot=True,zorder=0)
 plt.errorbar(z_obs,numpy.sqrt(v2m_obs),yerr=numpy.sqrt(v2m_obs_noise),marker='None',ls='none',color=sns.color_palette()[1])

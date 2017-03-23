@@ -35,15 +35,17 @@ all_counts_unc= all_counts_unc[ii,:,0]*1.0e-9
 # convert to pc^3
 all_effvol= all_effvol[ii,:,0]*1.0e9
 
+print ' N data point=',len(all_counts)
+
 zbins= np.arange(-0.4125,0.425,0.025)
 # only selected range to match with v2m data
-z_obs=np.arange(-0.175,0.2,0.025)
+z_obs=np.arange(-0.4,0.4,0.025)
 
-# boost density for hom2m
-dens_obs=all_counts[9:24]*1.0e3
-dens_obs_noise=all_counts_unc[9:24]*1.0e3
+# boost density for hom2m, normalise arbitrary for HOM2M
+dens_obs=all_counts[0:32]*1.5e3
+dens_obs_noise=all_counts_unc[0:32]*1.5e3
 
-print ' N z_obs, dens=',len(z_obs),len(dens_obs)
+print ' after selection N z_obs, dens=',len(z_obs),len(dens_obs)
 print ' z_obs=',z_obs
 
 # output fits file

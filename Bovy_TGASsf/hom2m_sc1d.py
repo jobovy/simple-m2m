@@ -38,10 +38,10 @@ def compute_dens(z,zsun,z_obs,h_obs,w=None):
     if w is None: w= numpy.ones_like(z)
     dens= numpy.zeros_like(z_obs)
 # assuming zdistmax=0.175+h_obs
-    nstar=len(numpy.where(z<0.175+h_obs)[0])
+#    nstar=len(numpy.where(z<0.175+h_obs)[0])
     for jj,zo in enumerate(z_obs):
-#        dens[jj]= numpy.sum(w*kernel(numpy.fabs(zo-z+zsun),h_obs))/len(z)
-        dens[jj]= numpy.sum(w*kernel(numpy.fabs(zo-z+zsun),h_obs))/nstar
+        dens[jj]= numpy.sum(w*kernel(numpy.fabs(zo-z+zsun),h_obs))/len(z)
+#        dens[jj]= numpy.sum(w*kernel(numpy.fabs(zo-z+zsun),h_obs))/nstar
     return dens
 
 ### M2M force of change definitions
@@ -127,7 +127,7 @@ def run_m2m_weights(w_init,A_init,phi_init,
                                                     h_m2m=h_m2m,
                                                     delta_m2m=delta_m2m)
         w_out+= step*fcw
-        w_out/= numpy.sum(w_out)/len(A_init)
+#        w_out/= numpy.sum(w_out)/len(A_init)
         w_out[w_out < 0.]= 10.**-16.
         if not smooth is None:
             Q_out.append(delta_m2m**2.)
@@ -240,7 +240,7 @@ def run_m2m_weights_zsun(w_init,A_init,phi_init,
                                       h_m2m=h_m2m,delta_m2m=delta_m2m)
         #print(fcz)
         w_out+= step*fcw
-        w_out/= numpy.sum(w_out)/len(A_init)
+#        w_out/= numpy.sum(w_out)/len(A_init)
         w_out[w_out < 0.]= 10.**-16.
         zsun_m2m+= step*fcz
         zsun_out.append(zsun_m2m)
@@ -364,7 +364,7 @@ def run_m2m_weights_wdensv2(w_init,A_init,phi_init,
                                                            h_m2m=h_m2m,
                                                            deltav2_m2m=deltav2_m2m)
         w_out+= step*fcw*(1.-nodens)+step*fcwv2
-        w_out/= numpy.sum(w_out)/len(A_init)
+#        w_out/= numpy.sum(w_out)/len(A_init)
         w_out[w_out < 0.]= 10.**-16.
         if not smooth is None:
             Q_out.append(delta_m2m**2.*(1.-nodens)+deltav2_m2m**2.)
@@ -509,7 +509,7 @@ def run_m2m_weights_wv2m(w_init,A_init,phi_init,
                                                            h_m2m=h_m2m,
                                                            deltav2m_m2m=deltav2m_m2m)
         w_out+= step*fcw*(1.-nodens)+step*fcwv2m
-        w_out/= numpy.sum(w_out)/len(A_init)
+#        w_out/= numpy.sum(w_out)/len(A_init)
         w_out[w_out < 0.]= 10.**-16.
         if not smooth is None:
             Q_out.append(delta_m2m**2.*(1.-nodens)+deltav2m_m2m**2.)
@@ -652,7 +652,7 @@ def run_m2m_weights_zsun_densv2m(w_init,A_init,phi_init,
                                       v2m_obs,v2m_obs_noise,eps_velw=1.0,
                                       h_m2m=h_m2m,delta_m2m=delta_m2m,deltav2m_m2m=deltav2m_m2m_new)
         w_out+= step*fcw+step*fcwv2m
-        w_out/= numpy.sum(w_out)/len(A_init)
+#        w_out/= numpy.sum(w_out)/len(A_init)
         w_out[w_out < 0.]= 10.**-16.
         zsun_m2m+= step*fcz
         zsun_out.append(zsun_m2m)
@@ -809,7 +809,7 @@ def run_m2m_weights_omega_densv2m(w_init,A_init,phi_init,
                                                            h_m2m=h_m2m,
                                                            deltav2m_m2m=deltav2m_m2m)
         w_out+= step*fcw+step*fcwv2
-        w_out/= numpy.sum(w_out)/len(A_init)
+#        w_out/= numpy.sum(w_out)/len(A_init)
         w_out[w_out < 0.]= 10.**-16. 
         Q_out.append(delta_m2m_new**2.+deltav2m_m2m_new**2.)
         # Increment smoothing
