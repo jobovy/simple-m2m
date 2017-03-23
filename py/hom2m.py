@@ -169,6 +169,38 @@ def force_of_change_densv2_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
                                   (len(z_m2m),1)).T*Wij,axis=0),
              deltav2_m2m_new)
 
+# Due to v^2
+def force_of_change_v2_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
+                               z_obs,v2_obs,v2_obs_noise,
+                               h_m2m,,kernel=epanechnikov_kernel,
+                               deltav2_m2m=None,Wij=None):
+    """Computes the force of change for all of the weights due to the velocity constraint"""
+    deltav2_m2m_new= numpy.zeros_like(z_obs)
+    if Wij is None:
+        Wij= numpy.zeros((len(z_obs),len(z_m2m)))
+        calc_Wij= True
+    else:
+        calc_Wij= False
+    dens_m2m= numpy.zeros_like(z_obs)
+    wv2_m2m= numpy.zeros_like(z_obs)
+    for jj,zo in enumerate(z_obs):
+        if calc_Wij:
+            Wij[jj]= kernel(numpy.fabs(zo-z_m2m+zsun_m2m),h_m2m)
+        dens_m2m[jj]=numpy.sum(w_m2m*Wij[jj])
+        wv2_m2m[jj]=numpy.sum(w_m2m*Wij[jj]*(vz_m2m**2))
+        deltav2_m2m_new[jj]= (wv2_m2m[jj]/dens_m2m[jj]-v2_obs[jj]) \
+            /v2_obs_noise[jj]
+    if deltav2_m2m is None: deltav2_m2m= deltav2_m2m_new
+    if numpy.any(dens_m2m==0.0)==True:
+        print ' dens_m2m has zero. dens_m2m==0 ',numpy.where(dens_m2m==0)
+        print ' zsun= ',zsun_m2m
+        sys.exit()
+    return (-(numpy.sum(numpy.tile(deltav2_m2m/(dens_m2m*v2_obs_noise), 
+        (len(z_m2m),1)).T*(Wij),axis=0) 
+        *(vz_m2m**2.)-numpy.sum(numpy.tile(
+        deltav2_m2m*wv2_m2m/((dens_m2m**2)*v2_obs_noise),
+        (len(z_m2m),1)).T*(Wij),axis=0)),deltav2_m2m_new)
+
 # Short-cuts
 def force_of_change_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
                             z_obs,dens_obs,dens_obs_noise,
