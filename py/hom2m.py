@@ -54,8 +54,8 @@ def compute_v2(z,vz,zsun,z_obs,h_obs,w=None,kernel=epanechnikov_kernel):
     if w is None: w= numpy.ones_like(z)/float(len(z))
     v2= numpy.zeros_like(z_obs)
     for jj,zo in enumerate(z_obs):
-        v2[jj]= numpy.sum(w*kernel(numpy.fabs(zo-z+zsun),h_obs)*vz**2.)\
-            /numpy.sum(w*kernel(numpy.fabs(zo-z+zsun),h_obs))
+        v2[jj]= numpy.nansum(w*kernel(numpy.fabs(zo-z+zsun),h_obs)*vz**2.)\
+            /numpy.nansum(w*kernel(numpy.fabs(zo-z+zsun),h_obs))
     return v2
 ### compute_densv2
 def compute_densv2(z,vz,zsun,z_obs,h_obs,w=None,kernel=epanechnikov_kernel):
