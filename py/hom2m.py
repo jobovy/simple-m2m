@@ -186,20 +186,16 @@ def force_of_change_v2_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
     for jj,zo in enumerate(z_obs):
         if calc_Wij:
             Wij[jj]= kernel(numpy.fabs(zo-z_m2m+zsun_m2m),h_m2m)
-        dens_m2m[jj]=numpy.sum(w_m2m*Wij[jj])
-        wv2_m2m[jj]=numpy.sum(w_m2m*Wij[jj]*(vz_m2m**2))
+        dens_m2m[jj]=numpy.nansum(w_m2m*Wij[jj])
+        wv2_m2m[jj]=numpy.nansum(w_m2m*Wij[jj]*(vz_m2m**2))
         deltav2_m2m_new[jj]= (wv2_m2m[jj]/dens_m2m[jj]-v2_obs[jj]) \
             /v2_obs_noise[jj]
     if deltav2_m2m is None: deltav2_m2m= deltav2_m2m_new
-    if numpy.any(dens_m2m==0.0)==True:
-        print ' dens_m2m has zero. dens_m2m==0 ',numpy.where(dens_m2m==0)
-        print ' zsun= ',zsun_m2m
-        sys.exit()
-    return (-(numpy.sum(numpy.tile(deltav2_m2m/(dens_m2m*v2_obs_noise), 
-        (len(z_m2m),1)).T*(Wij),axis=0) 
-        *(vz_m2m**2.)-numpy.sum(numpy.tile(
-        deltav2_m2m*wv2_m2m/((dens_m2m**2)*v2_obs_noise),
-        (len(z_m2m),1)).T*(Wij),axis=0)),deltav2_m2m_new)
+    return (-(numpy.nansum(numpy.tile(deltav2_m2m/(dens_m2m*v2_obs_noise), 
+                                      (len(z_m2m),1)).T*(Wij),axis=0) 
+              *(vz_m2m**2.)-numpy.nansum(numpy.tile(
+                    deltav2_m2m*wv2_m2m/((dens_m2m**2)*v2_obs_noise),
+                    (len(z_m2m),1)).T*(Wij),axis=0)),deltav2_m2m_new)
 
 # Short-cuts
 def force_of_change_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
@@ -208,7 +204,7 @@ def force_of_change_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
                             prior,mu,w_prior,
                             h_m2m=0.02,kernel=epanechnikov_kernel,
                             delta_m2m=None,deltav2_m2m=None,
-                            Wij=None,Wvz2ij=None):
+                            Wij=None,Wvz2ij=None,use_v2=False):
     """Computes the force of change for all of the weights"""
     fcw, delta_m2m_new=\
         force_of_change_density_weights(w_m2m,zsun_m2m,
@@ -218,7 +214,7 @@ def force_of_change_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
                                         h_m2m=h_m2m,kernel=kernel,
                                         delta_m2m=delta_m2m,Wij=Wij)
     # Add velocity constraint if given
-    if not densv2_obs is None:
+    if not densv2_obs is None and not use_v2:
         fcwv2, deltav2_m2m_new= \
             force_of_change_densv2_weights(w_m2m,zsun_m2m,
                                            z_m2m,vz_m2m,
@@ -228,6 +224,16 @@ def force_of_change_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
                                            kernel=kernel,
                                            deltav2_m2m=deltav2_m2m,
                                            Wij=Wvz2ij)
+    elif not densv2_obs is None: # use_v2
+        fcwv2, deltav2_m2m_new= \
+            force_of_change_v2_weights(w_m2m,zsun_m2m,
+                                       z_m2m,vz_m2m,
+                                       z_obs,
+                                       densv2_obs,densv2_obs_noise,
+                                       h_m2m=h_m2m,
+                                       kernel=kernel,
+                                       deltav2_m2m=deltav2_m2m,
+                                       Wij=Wij)
     else:
         fcwv2= 0.
         deltav2_m2m_new= 0.
@@ -241,15 +247,18 @@ def force_of_change_zsun(w_m2m,zsun_m2m,z_m2m,vz_m2m,
                          z_obs,dens_obs_noise,delta_m2m,
                          densv2_obs_noise,deltav2_m2m,
                          kernel_deriv=epanechnikov_kernel_deriv,
-                         h_m2m=0.02):
+                         h_m2m=0.02,use_v2=False):
     """Computes the force of change for zsun"""
     out= 0.
     for jj,zo in enumerate(z_obs):
         dWij= kernel_deriv(numpy.fabs(zo-z_m2m+zsun_m2m),h_m2m)\
             *numpy.sign(zo-z_m2m+zsun_m2m)
-        out+= delta_m2m[jj]/dens_obs_noise[jj]*numpy.nansum(w_m2m*dWij)\
-            +deltav2_m2m[jj]/densv2_obs_noise[jj]\
-            *numpy.nansum(w_m2m*vz_m2m**2.*dWij)
+        out+= delta_m2m[jj]/dens_obs_noise[jj]*numpy.nansum(w_m2m*dWij)
+        if not use_v2:
+            out+= deltav2_m2m[jj]/densv2_obs_noise[jj]\
+                *numpy.nansum(w_m2m*vz_m2m**2.*dWij)
+        else:
+            raise NotImplementedError("Force of change for zsun with <v^2> not implemented yet")
     return -out
 
 # omega
@@ -268,7 +277,7 @@ def force_of_change_omega(w_m2m,zsun_m2m,omega_m2m,
                           step,z_obs,dens_obs,dens_obs_noise,delta_m2m,
                           densv2_obs,densv2_obs_noise,deltav2_m2m,
                           h_m2m=0.02,kernel=epanechnikov_kernel,
-                          delta_omega=0.3):
+                          delta_omega=0.3,use_v2=False):
     """Compute the force of change by direct finite difference 
     of the objective function"""
     dz, dvz= zvzdiff(z_prev,vz_prev,omega_m2m,omega_m2m+delta_omega,step)
@@ -278,7 +287,7 @@ def force_of_change_omega(w_m2m,zsun_m2m,omega_m2m,
         z_obs,dens_obs,dens_obs_noise,
         densv2_obs,densv2_obs_noise,
         'entropy',0.,1., # weights prior doesn't matter, so set to zero
-        h_m2m=h_m2m,kernel=kernel)
+        h_m2m=h_m2m,kernel=kernel,use_v2=use_v2)
     return -numpy.nansum(\
         delta_m2m*(delta_m2m_do-delta_m2m)/dens_obs_noise
         +deltav2_m2m*(deltav2_m2m_do-deltav2_m2m)/densv2_obs_noise)\
@@ -329,7 +338,7 @@ def precalc_kernel(z_init,vz_init,
 def fit_m2m(w_init,z_init,vz_init,
             omega_m2m,zsun_m2m,
             z_obs,dens_obs,dens_obs_noise,
-            densv2_obs=None,densv2_obs_noise=None,
+            densv2_obs=None,densv2_obs_noise=None,use_v2=False,
             step=0.001,nstep=1000,
             eps=0.1,mu=1.,prior='entropy',w_prior=None,
             kernel=epanechnikov_kernel,
@@ -355,6 +364,7 @@ def fit_m2m(w_init,z_init,vz_init,
        dens_obs_noise - noise in the observed densities
        densv2_obs= (None) observed density x velocity-squareds (optional)
        densv2_obs_noise= (None) noise in the observed densities x velocity-squareds
+       use_v2= (False) if True, densv2_obs and densv2_obs_noise are actually <v^2> directly, not dens x <v^2>
        step= stepsize of orbit integration
        nstep= number of steps to integrate the orbits for
        eps= M2M epsilon parameter (can be array when fitting zsun, omega; in that case eps[0] = eps_weights, eps[1] = eps_zsun, eps[1 or 2 based on fit_zsun] = eps_omega)
@@ -425,14 +435,15 @@ def fit_m2m(w_init,z_init,vz_init,
                                 densv2_obs,densv2_obs_noise,
                                 prior,mu,w_prior,
                                 h_m2m=h_m2m,kernel=kernel,
-                                Wij=Kij,Wvz2ij=Kvz2ij)
+                                Wij=Kij,Wvz2ij=Kvz2ij,use_v2=use_v2)
     fcw*= w_init
     fcz= 0.
     if fit_zsun:
         fcz= force_of_change_zsun(w_init,zsun_m2m,z_init,vz_init,
                                   z_obs,dens_obs_noise,delta_m2m_new,
                                   densv2_obs_noise,deltav2_m2m_new,
-                                  kernel_deriv=kernel_deriv,h_m2m=h_m2m)
+                                  kernel_deriv=kernel_deriv,h_m2m=h_m2m,
+                                  use_v2=use_v2)
     if not smooth is None:
         delta_m2m= delta_m2m_new
         deltav2_m2m= deltav2_m2m_new
@@ -499,7 +510,7 @@ def fit_m2m(w_init,z_init,vz_init,
                                     h_m2m=h_m2m,kernel=kernel,
                                     delta_m2m=tdelta_m2m,
                                     deltav2_m2m=tdeltav2_m2m,
-                                    Wij=Kij,Wvz2ij=Kvz2ij)
+                                    Wij=Kij,Wvz2ij=Kvz2ij,use_v2=use_v2)
         fcw_new*= w_out
         if fit_zsun:
             if smooth is None or not st96smooth:
@@ -509,7 +520,7 @@ def fit_m2m(w_init,z_init,vz_init,
                                           z_obs,dens_obs_noise,tdelta_m2m,
                                           densv2_obs_noise,tdeltav2_m2m,
                                           kernel_deriv=kernel_deriv,
-                                          h_m2m=h_m2m)
+                                          h_m2m=h_m2m,use_v2=use_v2)
         if fit_omega:
             omega_out[ii]= omega_m2m
             # Update omega in this step?
@@ -526,7 +537,8 @@ def fit_m2m(w_init,z_init,vz_init,
                                                densv2_obs,densv2_obs_noise,
                                                tdeltav2_m2m,
                                                h_m2m=h_m2m,kernel=kernel,
-                                               delta_omega=delta_omega)
+                                               delta_omega=delta_omega,
+                                               use_v2=use_v2)
                 z_prev= copy.copy(z_m2m)
                 vz_prev= copy.copy(vz_m2m)
         # Increment smoothing
