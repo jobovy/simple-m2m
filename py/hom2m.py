@@ -172,7 +172,7 @@ def force_of_change_densv2_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
 # Due to v^2
 def force_of_change_v2_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
                                z_obs,v2_obs,v2_obs_noise,
-                               h_m2m,,kernel=epanechnikov_kernel,
+                               h_m2m,kernel=epanechnikov_kernel,
                                deltav2_m2m=None,Wij=None):
     """Computes the force of change for all of the weights due to the velocity constraint"""
     deltav2_m2m_new= numpy.zeros_like(z_obs)
@@ -585,6 +585,7 @@ def sample_m2m(nsamples,
           sig_omega= (0.2) if sampling omega (fit_omega=True), proposal stepsize for steps in omega
           nmh_omega= (20) number of MH steps to do for omega for each weights sample
           nstep_omega= (500) number of steps to average the likelihood over for omega MH; also the number of steps taken to change omega adiabatically
+          nstepadfac_omega= (10) use nstepadfac_omega x nstep_omega steps to adiabatically change the frequency to the proposed value
 
        Rest of the parameters are the same as for fit_m2m
     OUTPUT:
@@ -618,12 +619,12 @@ def sample_m2m(nsamples,
     kwargs['fit_omega']= False # Turn off for weights fits
     sig_omega= kwargs.pop('sig_omega',0.005)
     nmh_omega= kwargs.pop('nmh_omega',20)
-    nstep_omega= kwargs.pop('nstep_omega',499*fit_omega+1)
+    nstep_omega= kwargs.pop('nstep_omega',nstep_zsun*fit_zsun\
+                                +500*(1-fit_zsun))
+    nstepadfac_omega= kwargs.pop('nstepadfac_omega',10)
     if fit_omega: 
         omega_out= numpy.empty((nsamples))
         nacc_omega= 0
-    # Orbits
-    A_now, phi_now= zvz_to_Aphi(z_init,vz_init,omega_m2m)
     # Copy some kwargs that we need to re-use
     densv2_obs= copy.deepcopy(kwargs.get('densv2_obs',None))
     if not densv2_obs is None:
@@ -631,7 +632,7 @@ def sample_m2m(nsamples,
     else:
         Q_out= numpy.empty((nsamples,len(dens_obs)))
     # Setup orbits
-    A_init, phi_init= zvz_to_Aphi(z_init,vz_init,omega_m2m)
+    A_now, phi_now= zvz_to_Aphi(z_init,vz_init,omega_m2m)
     z_m2m= z_init
     vz_m2m= vz_init
     for ii in tqdm.tqdm(range(nsamples)):
@@ -645,37 +646,49 @@ def sample_m2m(nsamples,
         tout= fit_m2m(kwargs['w_prior'],z_m2m,vz_m2m,omega_m2m,zsun_m2m,
                       z_obs,tdens_obs,dens_obs_noise,
                       **kwargs)
-        tQ= tout[1] # approx. Q with final part of optimization
         # Keep track of orbits
         phi_now+= omega_m2m*kwargs.get('nstep',1000)*kwargs.get('step',0.001)
-        if fit_zsun or fit_omega:
-            if not densv2_obs is None: # Need to fit original data
-                kwargs['densv2_obs']= densv2_obs
+        z_m2m, vz_m2m= Aphi_to_zvz(A_now,phi_now,omega_m2m)
+        if not densv2_obs is None: # Need to switch back to original data
+            kwargs['densv2_obs']= densv2_obs
+        # Compute average chi^2
         if fit_zsun:
-            # Rewind orbit, so we use same part for all zsun
+            tnstep= nstep_zsun
+        else:
+            tnstep= nstep_omega
+        kwargs['nstep']= tnstep
+        kwargs['eps']= 0. # Don't change weights
+        dum= fit_m2m(tout[0],z_m2m,vz_m2m,omega_m2m,zsun_m2m,
+                     z_obs,dens_obs,dens_obs_noise,
+                     **kwargs)
+        kwargs['nstep']= nstep
+        kwargs['eps']= eps
+        tQ= numpy.mean(dum[1],axis=0)
+        if fit_zsun:
+            # Rewind orbit, so we use same part for all zsun/omega
             phi_now-= omega_m2m*nstep_zsun*kwargs.get('step',0.001)
             z_m2m, vz_m2m= Aphi_to_zvz(A_now,phi_now,omega_m2m)
             for jj in range(nmh_zsun):
                 # Do a MH step
                 zsun_new= zsun_m2m+numpy.random.normal()*sig_zsun
-                kwargs['nstep']= nstep_zsun+3
+                kwargs['nstep']= nstep_zsun
                 kwargs['eps']= 0. # Don't change weights
                 dum= fit_m2m(tout[0],z_m2m,vz_m2m,omega_m2m,zsun_new,
                              z_obs,dens_obs,dens_obs_noise,
                              **kwargs)
                 kwargs['nstep']= nstep
                 kwargs['eps']= eps
-                acc= -numpy.mean(\
-                    numpy.nansum(dum[1][-nstep_zsun:-1]-tQ[-nstep_zsun:-1],
-                              axis=1))/2.
+                acc= (numpy.nansum(tQ)
+                      -numpy.mean(numpy.nansum(dum[1],axis=1)))/2.
                 if acc > numpy.log(numpy.random.uniform()):
                     zsun_m2m= zsun_new
-                    tQ= dum[1]
+                    tQ= numpy.mean(dum[1],axis=0)
                     nacc_zsun+= 1               
             zsun_out[ii]= zsun_m2m
             # update orbit
             phi_now+= omega_m2m*nstep_zsun*kwargs.get('step',0.001)
             z_m2m, vz_m2m= Aphi_to_zvz(A_now,phi_now,omega_m2m)
+        # We assume here that nstep_omega = nstep_zsun
         if fit_omega:
             for jj in range(nmh_omega):
                 # Do a MH step
@@ -684,32 +697,36 @@ def sample_m2m(nsamples,
                 # integrating backward
                 z_cur= copy.copy(z_m2m)
                 vz_cur= copy.copy(vz_m2m)
-                for kk in range(nstep_omega):
+                for kk in range(nstep_omega*nstepadfac_omega):
                     omega_cur= omega_m2m+(omega_new-omega_m2m)\
-                        *kk/float(nstep_omega-1)
+                        *kk/float(nstep_omega*nstepadfac_omega-1)
                     A_cur, phi_cur= zvz_to_Aphi(z_cur,vz_cur,omega_cur)
                     phi_cur-= omega_cur*kwargs.get('step',0.001)
                     z_cur, vz_cur= Aphi_to_zvz(A_cur,phi_cur,omega_cur)
-                kwargs['nstep']= nstep_omega+3
+                # and forward again!
+                phi_cur+= omega_cur*kwargs.get('step',0.001)\
+                    *nstep_omega*(nstepadfac_omega-1)
+                kwargs['nstep']= nstep_omega
                 kwargs['eps']= 0. # Don't change weights
                 dum= fit_m2m(tout[0],z_cur,vz_cur,omega_new,zsun_m2m,
                              z_obs,dens_obs,dens_obs_noise,
                              **kwargs)
                 kwargs['nstep']= nstep
                 kwargs['eps']= eps
-                acc= -numpy.mean(\
-                    numpy.nansum(dum[1][-nstep_omega:-1]-tQ[-nstep_omega:-1],
-                                 axis=1))/2.
+                acc= (numpy.nansum(tQ)\
+                          -numpy.mean(numpy.nansum(dum[1],axis=1)))/2.
                 if acc > numpy.log(numpy.random.uniform()):
                     omega_m2m= omega_new
-                    tQ= dum[1]
+                    tQ= numpy.mean(dum[1],axis=0)
                     nacc_omega+= 1
                     # Update phase-space positions
                     phi_cur+= omega_new*nstep_omega*kwargs.get('step',0.001)
-                    z_m2m, vz_m2m= Aphi_to_zvz(A_cur,phi_cur,omega_m2m)
+                    A_now= A_cur
+                    phi_now= phi_cur
+                    z_m2m, vz_m2m= Aphi_to_zvz(A_now,phi_now,omega_m2m)
             omega_out[ii]= omega_m2m
         w_out[ii]= tout[0]
-        Q_out[ii]= tQ[-1]
+        Q_out[ii]= tQ
         z_out[ii]= z_m2m
         vz_out[ii]= vz_m2m
     out= (w_out,)
