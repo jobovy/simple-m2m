@@ -664,6 +664,9 @@ def sample_m2m(nsamples,
         kwargs['nstep']= nstep
         kwargs['eps']= eps
         tQ= numpy.mean(dum[1],axis=0)
+        # Keep track of orbits
+        phi_now+= omega_m2m*tnstep*kwargs.get('step',0.001)
+        z_m2m, vz_m2m= Aphi_to_zvz(A_now,phi_now,omega_m2m)
         if fit_zsun:
             # Rewind orbit, so we use same part for all zsun/omega
             phi_now-= omega_m2m*nstep_zsun*kwargs.get('step',0.001)
@@ -688,7 +691,19 @@ def sample_m2m(nsamples,
             # update orbit
             phi_now+= omega_m2m*nstep_zsun*kwargs.get('step',0.001)
             z_m2m, vz_m2m= Aphi_to_zvz(A_now,phi_now,omega_m2m)
-        # We assume here that nstep_omega = nstep_zsun
+        if fit_zsun and nstep_zsun != nstep_omega:
+            # Need to compute average obj. function for nstep_omega
+            kwargs['nstep']= nstep_omega
+            kwargs['eps']= 0. # Don't change weights
+            dum= fit_m2m(tout[0],z_m2m,vz_m2m,omega_m2m,zsun_m2m,
+                         z_obs,dens_obs,dens_obs_noise,
+                         **kwargs)
+            kwargs['nstep']= nstep
+            kwargs['eps']= eps
+            tQ= numpy.mean(dum[1],axis=0)
+            # Keep track of orbits
+            phi_now+= omega_m2m*nstep_omega*kwargs.get('step',0.001)
+            z_m2m, vz_m2m= Aphi_to_zvz(A_now,phi_now,omega_m2m)
         if fit_omega:
             for jj in range(nmh_omega):
                 # Do a MH step
@@ -706,6 +721,7 @@ def sample_m2m(nsamples,
                 # and forward again!
                 phi_cur+= omega_cur*kwargs.get('step',0.001)\
                     *nstep_omega*(nstepadfac_omega-1)
+                z_cur, vz_cur= Aphi_to_zvz(A_cur,phi_cur,omega_cur)
                 kwargs['nstep']= nstep_omega
                 kwargs['eps']= 0. # Don't change weights
                 dum= fit_m2m(tout[0],z_cur,vz_cur,omega_new,zsun_m2m,
