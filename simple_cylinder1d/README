@@ -2,6 +2,10 @@
 hom2m_sc1d.py
  hom2m library for simple-cylinder1d data
 
+### analysis of Vz distribution after finding excess of negative Vz
+
+vzdistTGAS.py
+ vz calculation purely from TGAS data.
 
 ### run hom2m using the output of densv2m1d_fstar_sample.py
 
@@ -55,6 +59,49 @@ Mv=VTmag-5.0*log10(1000.0/Plx)+5.0
 --- conversion to physical values from Jo
 
 Holmberg & Flynn (2000) 0.102pm0.010
+For F stars, they got 8.3pm0.3 km/s
+
+For an isothermal distribution in the HO potential for a single data point
+
+ln p(z,vz) =  -0.5 x ( omega^2 z^2 + vz^2)/sigma_z^2 - ln (\sigma_z^2/ omega)
+
+and for many data points
+
+ln L = \sum_i ln p(z_i,vz_i) =  -0.5 x \sum_i ( omega^2 z_i^2 + vz_i^2)/ sigma_z^2 - N ln (\sigma_z^2/ omega)
+
+Maximum likelihood of this gives
+
+d ln L / d sigma_z^2 ~ \sum_i (omega^2 z_i^2 + vz_i^2) / sigma_z^4 / 2  - N/sigma_z^2 = 0
+
+or
+
+omega_^2 <z^2> + <vz^2> = 2 sigma^2
+
+and
+
+d ln L / d omega = - omega \sum_i z_i^2 / sigma_z^2 +N / omega ===> omega^2 =N \sigma_z^2 /  \sum_i z_i^2 = \sigma_z^2 / <z^2>
+
+so 
+
+sigma_z^2 = <vz^2>
+omega^2 = <vz^2> / <z^2>
+
+For an exponential
+
+<z^2> = \int dz z^2 exp(-z/zd) = zd^2 \int dx x^2 exp(-x) = 2 zd^2
+
+so
+
+omega^2 = sigma_z^2 / z_d^2 / 2 ===> omega = \sigma_z / zd / sqrt(2)
+
+[For a sech^2 profile <z^2> = pi^2/3 zd^2 ~ 1.8^2 zd^2]. So I think we were both off by factors of sqrt(2)! Maybe I messed up a factor of two again though...
+
+
+
+The conversion goes as 
+
+4pi G rho ~ omega^2 [Poisson equation]
+
 
 rho = (omega/100 km/s/kpc)^2 x 0.1849 Msun / pc^3
 

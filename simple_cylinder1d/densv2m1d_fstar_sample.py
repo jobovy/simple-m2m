@@ -21,15 +21,22 @@ import matplotlib.cm as cm
 import seaborn as sns
 from StringIO import StringIO
 from hom2m_sc1d import *
+from astropy.modeling import models, fitting
 
 # input parameters
 # eplx/plx limit pi=parallax
-eplxlim=0.15
+eplxlim=0.1
 # Vt mag limit
 vtlim=11.5
 # colour range, F0V and F9V
 bvtcolmin=0.317
 bvtcolmax=0.587
+# A0V and A9V
+# bvtcolmin=0.013
+# bvtcolmax=0.279
+# G0V and G9V
+# bvtcolmin=0.650
+# bvtcolmax=0.894
 # RAVE radial velocity error limit
 hrverrlim=10.0
 hrvlim=200.0
@@ -41,7 +48,9 @@ nsamp=100
 rxylim=0.2
 # nbin and z range max and min for North (_n) and South (_s)
 # z_obs= numpy.array([0.075,0.1,0.125,0.15,0.175,-0.075,-0.1,-0.125,-0.15,-0.175])
-z_obs= numpy.array([0.0,0.025,0.05,0.075,0.1,0.125,0.15,0.175,-0.025,-0.05,-0.075,-0.1,-0.125,-0.15,-0.175])
+# z_obs= numpy.array([0.0,0.025,0.05,0.075,0.1,0.125,0.15,0.175,-0.025,-0.05,-0.075,-0.1,-0.125,-0.15,-0.175])
+z_obs=numpy.arange(-0.175,0.2,0.025)
+print 'z_obs=',z_obs
 h_obs= 0.075
 zoff_obs=0.0
 zmax=h_obs+0.175
@@ -245,6 +254,7 @@ print 'number of all TGASxRAVE stars=',nstar_alls
 mcsindx=np.where((rstar['VTmag']<vtlim) \
   & (rstar['BTmag']-rstar['VTmag']>bvtcolmin) \
   & (rstar['BTmag']-rstar['VTmag']<bvtcolmax) \
+#  & (np.fabs(rstar['e_Plx']/rstar['Plx'])<eplxlim) \
   & (rstar['eHRV']<hrverrlim) & (np.fabs(rstar['HRV'])<hrvlim))
 
 nstar_mcs=len(mcsindx[0])
@@ -266,8 +276,22 @@ pmdecerr_mcs=rstar['e_pmDE'][mcsindx]
 hrv_mcs=rstar['HRV'][mcsindx]
 hrverr_mcs=rstar['eHRV'][mcsindx]
 logg_mcs=rstar['logg_N_K'][mcsindx]
+metnk_mcs=rstar['Met_N_K'][mcsindx]
 
 v2m_obs_samp=np.zeros((nsamp,len(z_obs)))
+
+# analyse vz distribution
+# nbin=100
+# vmin=-100.0
+# vmax=100.0
+# vzhist=np.zeros(nbin)
+# nvzhist_samp=np.zeros((nsamp,nbin))
+
+nbin=30
+vmin=-50.0
+vmax=50.0
+vzhist=np.zeros(nbin)
+nvzhist_samp=np.zeros((nsamp,nbin))
 
 isamp=0
 while isamp<nsamp:
@@ -294,6 +318,7 @@ while isamp<nsamp:
   hrv_ps=hrv_mcs[psindx]
   hrverr_ps=hrverr_mcs[psindx]
   logg_ps=logg_mcs[psindx]
+  metnk_ps=metnk_mcs[psindx]
 
 # displace the velocity data using errors
   pmra_ps=pmra_ps+pmraerr_ps*np.random.normal(size=pmra_ps.shape)
@@ -319,15 +344,23 @@ while isamp<nsamp:
   pmlon_ps=Tpmlb[:,0]
   pmlat_ps=Tpmlb[:,1]
 # calculate vz
+  Tvxvyvz=bovy_coords.vrpmllpmbb_to_vxvyvz(hrv_ps,pmlon_ps,pmlat_ps,glon_ps,glat_ps,1.0/plx_ps)
+  velx_ps=Tvxvyvz[:,0]
+  vely_ps=Tvxvyvz[:,1]
+  velz_ps=Tvxvyvz[:,2]
   pmvconst=4.74047
-  velz_ps=np.cos(glat_ps)*pmvconst*pmlat_ps/plx_ps \
-   +np.sin(glat_ps)*hrv_ps
+
+# this is consistent with bovy_coords, but use bovy_coords
+#  velz_ps=np.cos(glat_ps)*pmvconst*pmlat_ps/plx_ps \
+#   +np.sin(glat_ps)*hrv_ps
+
 
 # x,y,z position relative to the sun (kpc)
   rxy_ps=np.cos(glat_ps)/plx_ps
 
 # cylinder selection
-  csindx=np.where(rxy_ps<rxylim)
+  csindx=np.where((rxy_ps<rxylim))
+#  csindx=np.where((rxy_ps<rxylim) & (np.fabs(glat_ps)<45.0*np.pi/180.0))
 
 # position for selected stars
   xpos_cs=rxy_ps[csindx]*np.cos(glon_ps[csindx])
@@ -336,9 +369,11 @@ while isamp<nsamp:
   plx_cs=plx_ps[csindx]
   vt_cs=vt_ps[csindx]
   bt_cs=bt_ps[csindx]
+  velx_cs=velx_ps[csindx]
+  vely_cs=vely_ps[csindx]
   velz_cs=velz_ps[csindx]
   glon_cs=glon_ps[csindx]
-  glat_cs=glon_ps[csindx]
+  glat_cs=glat_ps[csindx]
   vlon_cs=pmvconst*pmlon_ps[csindx]/plx_ps[csindx]
   vlat_cs=pmvconst*pmlat_ps[csindx]/plx_ps[csindx]
   pmraerr_cs=pmvconst \
@@ -352,20 +387,34 @@ while isamp<nsamp:
   hrverr_cs=hrverr_ps[csindx]
   hrv_cs=hrv_ps[csindx]
   logg_cs=logg_ps[csindx]
+  metnk_cs=metnk_ps[csindx]
 
   nstar_cs=len(xpos_cs)
 
+# keep vz distribution
+  velzhist=np.histogram(velz_cs,nbin,(vmin,vmax),density=True)
+  if isamp==0:
+# set vzhist
+    i=0
+    while i<nbin:
+      vzhist[i]=0.5*(velzhist[1][i+1]+velzhist[1][i])
+      i+=1
+
+  nvzhist_samp[isamp,:]=velzhist[0]
+
 # output ascii data for test
-#   f=open('cylinder_starvz_samp.asc','w')
-#   i=0
-#   while i < nstar_cs:
-#    print >>f, "%f %f %f %f %f %f %f %f %f %f %f %f %f %f" \
-#      %(xpos_cs[i],ypos_cs[i],zpos_cs[i], \
-#      plx_cs[i],bt_cs[i],vt_cs[i],velz_cs[i], \
-#        pmraerr_cs[i],pmdecerr_cs[i],hrverr_cs[i],hrv_cs[i],vlon_cs[i] \
-#        ,vlat_cs[i],logg_cs[i])
-#    i+=1
-#  f.close()
+  if isamp==0:
+    f=open('cylinder_starvz_samp.asc','w')
+    i=0
+    while i < nstar_cs:
+      print >>f, "%f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f" \
+        %(xpos_cs[i],ypos_cs[i],zpos_cs[i], \
+        plx_cs[i],bt_cs[i],vt_cs[i],velz_cs[i], \
+        pmraerr_cs[i],pmdecerr_cs[i],hrverr_cs[i],hrv_cs[i],vlon_cs[i], \
+          vlat_cs[i],logg_cs[i],metnk_cs[i],velx_cs[i],vely_cs[i],glon_cs[i],glat_cs[i])
+      i+=1
+    f.close()
+
   if isamp==0:
     print ' mean velocity errors Vhel,Vra,Vdec=',np.mean(hrverr_cs) \
      ,np.mean(pmraerr_cs),np.mean(pmdecerr_cs)
@@ -388,6 +437,36 @@ v2m_obs=np.mean(v2m_obs_samp,axis=0)
 v2m_obs_noise=np.std(v2m_obs_samp,axis=0)
 
 print 'v2m,err=',v2m_obs,v2m_obs_noise
+
+# vz distribution
+vzdist=np.mean(nvzhist_samp,axis=0)
+vzdist_noise=np.std(nvzhist_samp,axis=0)
+
+# 1 Gaussian fit
+g_init=models.Gaussian1D(amplitude=0.3, mean=0, stddev=1)
+fit_g=fitting.LevMarLSQFitter()
+g=fit_g(g_init,vzhist,vzdist)
+print g
+# plot
+plt.figure(figsize=(8,5))
+plt.plot(vzhist,vzdist,'ko')
+plt.errorbar(vzhist,vzdist,yerr=vzdist_noise,marker='None',ls='none',color=sns.color_palette()[1])
+plt.plot(vzhist,g(vzhist))
+plt.show()
+
+# 2 Gaussian fit
+gg_init = models.Gaussian1D(0.3, -6.5, 13.0) + models.Gaussian1D(0.01, -20.0, 30.0)
+fitter = fitting.SLSQPLSQFitter()
+gg_fit = fitter(gg_init,vzhist,vzdist)
+print gg_fit
+#print ' Gaussian fit, mean, stddev=',gg_fit.mean,gg_fit.stddev
+# plot
+plt.figure(figsize=(8,5))
+plt.plot(vzhist,vzdist,'ko')
+plt.errorbar(vzhist,vzdist,yerr=vzdist_noise,marker='None',ls='none',color=sns.color_palette()[1])
+plt.plot(vzhist,gg_fit(vzhist))
+plt.show()
+
 
 file_cs='cylinder_v2m.asc'
 f=open(file_cs,'w')
