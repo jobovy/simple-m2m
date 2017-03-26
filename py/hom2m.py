@@ -246,19 +246,31 @@ def force_of_change_weights(w_m2m,zsun_m2m,z_m2m,vz_m2m,
 def force_of_change_zsun(w_m2m,zsun_m2m,z_m2m,vz_m2m,
                          z_obs,dens_obs_noise,delta_m2m,
                          densv2_obs_noise,deltav2_m2m,
+                         kernel=epanechnikov_kernel,
                          kernel_deriv=epanechnikov_kernel_deriv,
                          h_m2m=0.02,use_v2=False):
     """Computes the force of change for zsun"""
+    if use_v2:
+        dens_m2m= numpy.zeros_like(z_obs)
+        wv2_m2m= numpy.zeros_like(z_obs)
+        for jj,zo in enumerate(z_obs):
+            Wij= kernel(numpy.fabs(zo-z_m2m+zsun_m2m),h_m2m)
+            dens_m2m[jj]=numpy.nansum(w_m2m*Wij)
+            wv2_m2m[jj]=numpy.nansum(w_m2m*Wij*(vz_m2m**2))
+
     out= 0.
     for jj,zo in enumerate(z_obs):
         dWij= kernel_deriv(numpy.fabs(zo-z_m2m+zsun_m2m),h_m2m)\
             *numpy.sign(zo-z_m2m+zsun_m2m)
-        out+= delta_m2m[jj]/dens_obs_noise[jj]*numpy.nansum(w_m2m*dWij)
+        wdWj= numpy.nansum(w_m2m*dWij)
+        out+= delta_m2m[jj]/dens_obs_noise[jj]*wdWj
         if not use_v2:
             out+= deltav2_m2m[jj]/densv2_obs_noise[jj]\
                 *numpy.nansum(w_m2m*vz_m2m**2.*dWij)
         else:
-            raise NotImplementedError("Force of change for zsun with <v^2> not implemented yet")
+            wv2mdWj= numpy.nansum(w_m2m*(vz_m2m**2)*dWij)
+            out+= (deltav2_m2m[jj]/densv2_obs_noise[jj]) \
+                 *((wv2mdWj/dens_m2m[jj])-(wv2_m2m[jj]/(dens_m2m[jj]**2))*wdWj)
     return -out
 
 # omega
@@ -288,15 +300,20 @@ def force_of_change_omega(w_m2m,zsun_m2m,omega_m2m,
         densv2_obs,densv2_obs_noise,
         'entropy',0.,1., # weights prior doesn't matter, so set to zero
         h_m2m=h_m2m,kernel=kernel,use_v2=use_v2)
+#    return -numpy.nansum(\
+#        delta_m2m*(delta_m2m_do-delta_m2m)/dens_obs_noise
+#        +deltav2_m2m*(deltav2_m2m_do-deltav2_m2m)/densv2_obs_noise)\
+#        /delta_omega
+
     return -numpy.nansum(\
-        delta_m2m*(delta_m2m_do-delta_m2m)/dens_obs_noise
-        +deltav2_m2m*(deltav2_m2m_do-deltav2_m2m)/densv2_obs_noise)\
+        delta_m2m*(delta_m2m_do-delta_m2m)
+        +deltav2_m2m*(deltav2_m2m_do-deltav2_m2m))\
         /delta_omega
 
 ################################ M2M OPTIMIZATION #############################
 def precalc_kernel(z_init,vz_init,
                    omega_m2m,zsun_m2m,
-                   z_obs,step=0.001,nstep=1000,
+                   z_obs,use_v2=False,step=0.001,nstep=1000,
                    kernel=epanechnikov_kernel,h_m2m=0.02):
     """
     NAME:
@@ -308,6 +325,7 @@ def precalc_kernel(z_init,vz_init,
        vz_init - initial vz (rad) [N]
        omega_m2m - potential parameter omega
        zsun_m2m - Sun's height above the plane [N]
+       use_v2= (False) if True, densv2_obs and densv2_obs_noise are actually <v^2> directly, not dens x <v^2>
        z_obs - heights at which the density observations are made
        step= stepsize of orbit integration
        nstep= number of steps to integrate the orbits for
@@ -318,6 +336,7 @@ def precalc_kernel(z_init,vz_init,
                           densityx v^2 kernels [n_zobs,n_weights])
     HISTORY:
        2017-03-14 - Written - Bovy (UofT/CCA)
+       2017-03-25 - Added use_v2 for <v^2> case - Kawata (MSSL,UCL)
     """
     Kij= numpy.zeros((len(z_obs),len(z_init)))
     Kvz2ij= numpy.zeros((len(z_obs),len(z_init)))
@@ -332,7 +351,10 @@ def precalc_kernel(z_init,vz_init,
         for jj,zo in enumerate(z_obs):
             tW[jj]= kernel(numpy.fabs(zo-z_m2m+zsun_m2m),h_m2m)
         Kij+= tW
-        Kvz2ij+= tW*vz_m2m**2.
+        if use_v2:
+            Kvz2ij+= ((tW*vz_m2m**2.).T/numpy.nansum(tW,axis=1)).T
+        else:
+            Kvz2ij+= tW*vz_m2m**2.
     return (Kij/nstep,Kvz2ij/nstep)
 
 def fit_m2m(w_init,z_init,vz_init,
@@ -442,8 +464,8 @@ def fit_m2m(w_init,z_init,vz_init,
         fcz= force_of_change_zsun(w_init,zsun_m2m,z_init,vz_init,
                                   z_obs,dens_obs_noise,delta_m2m_new,
                                   densv2_obs_noise,deltav2_m2m_new,
-                                  kernel_deriv=kernel_deriv,h_m2m=h_m2m,
-                                  use_v2=use_v2)
+                                  kernel=kernel,kernel_deriv=kernel_deriv,
+                                  h_m2m=h_m2m,use_v2=use_v2)
     if not smooth is None:
         delta_m2m= delta_m2m_new
         deltav2_m2m= deltav2_m2m_new
@@ -519,6 +541,7 @@ def fit_m2m(w_init,z_init,vz_init,
             fcz_new= force_of_change_zsun(w_out,zsun_m2m,z_m2m,vz_m2m,
                                           z_obs,dens_obs_noise,tdelta_m2m,
                                           densv2_obs_noise,tdeltav2_m2m,
+                                          kernel=kernel,
                                           kernel_deriv=kernel_deriv,
                                           h_m2m=h_m2m,use_v2=use_v2)
         if fit_omega:
@@ -617,6 +640,7 @@ def sample_m2m(nsamples,
     vz_out= numpy.empty_like(w_out)
     eps= kwargs.get('eps',0.1)
     nstep= kwargs.get('nstep',1000)
+
     # zsun
     fit_zsun= kwargs.get('fit_zsun',False)
     kwargs['fit_zsun']= False # Turn off for weights fits
@@ -766,32 +790,4 @@ def sample_m2m(nsamples,
     if fit_omega: print("MH acceptance ratio for omega was %.2f" \
                             % (nacc_omega/float(nmh_omega*nsamples)))
     return out
-
-### force_of_change_zsun_densv2m
-
-def force_of_change_zsun_densv2m(w_m2m,zsun_m2m,z_m2m,vz_m2m,
-                         eps,mu,w_prior,
-                         z_obs,dens_obs,dens_obs_noise,v2m_obs,v2m_obs_noise,
-                         eps_velw=1.0,h_m2m=0.02,
-                         delta_m2m=None,deltav2m_m2m=None):
-    """Computes the force of change for zsun from density and <v^2> constraints"""
-    dens_m2m= numpy.zeros_like(z_obs)
-    wv2m_m2m= numpy.zeros_like(z_obs)
-    for jj,zo in enumerate(z_obs):
-        Wij= kernel(numpy.fabs(zo-z_m2m+zsun_m2m),h_m2m)
-        dens_m2m[jj]=numpy.sum(w_m2m*Wij)
-        wv2m_m2m[jj]=numpy.sum(w_m2m*Wij*(vz_m2m**2))
-
-    
-    out= 0.
-    for jj,zo in enumerate(z_obs):
-        # from density
-        dWij= kernel_deriv(numpy.fabs(zo-z_m2m+zsun_m2m),h_m2m)*numpy.sign(zo-z_m2m+zsun_m2m)
-        wdWj= numpy.sum(w_m2m*dWij)
-        out+= delta_m2m[jj]/dens_obs_noise[jj]*wdWj/len(z_m2m)
-        # from velocity
-        wv2mdWj= numpy.sum(w_m2m*(vz_m2m**2)*dWij)
-        out+= eps_velw*(deltav2m_m2m[jj]/v2m_obs_noise[jj]) \
-              *((wv2mdWj/dens_m2m[jj])-(wv2m_m2m[jj]/(dens_m2m[jj]**2))*wdWj)
-    return -eps*out
 
