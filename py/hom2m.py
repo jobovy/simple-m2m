@@ -484,7 +484,7 @@ def fit_m2m(w_init,z_init,vz_init,
     for ii in range(nstep):
         # Update weights first
         w_out+= eps[0]*step*fcw
-        w_out[w_out < 0.]= 10.**-16.
+        w_out[w_out < 10.**-16.]= 10.**-16.
         # then zsun
         if fit_zsun: 
             zsun_m2m+= eps[1]*step*fcz 
