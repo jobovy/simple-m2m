@@ -263,14 +263,17 @@ def force_of_change_zsun(w_m2m,zsun_m2m,z_m2m,vz_m2m,
         dWij= kernel_deriv(numpy.fabs(zo-z_m2m+zsun_m2m),h_m2m)\
             *numpy.sign(zo-z_m2m+zsun_m2m)
         wdWj= numpy.nansum(w_m2m*dWij)
-        out+= delta_m2m[jj]/dens_obs_noise[jj]*wdWj
+        if not numpy.isnan(delta_m2m[jj]/dens_obs_noise[jj]):
+            out+= delta_m2m[jj]/dens_obs_noise[jj]*wdWj
         if not use_v2:
-            out+= deltav2_m2m[jj]/densv2_obs_noise[jj]\
-                *numpy.nansum(w_m2m*vz_m2m**2.*dWij)
+            if not numpy.isnan(deltav2_m2m[jj]/densv2_obs_noise[jj]):
+                out+= deltav2_m2m[jj]/densv2_obs_noise[jj]\
+                    *numpy.nansum(w_m2m*vz_m2m**2.*dWij)
         else:
             wv2mdWj= numpy.nansum(w_m2m*(vz_m2m**2)*dWij)
-            out+= (deltav2_m2m[jj]/densv2_obs_noise[jj]) \
-                 *((wv2mdWj/dens_m2m[jj])-(wv2_m2m[jj]/(dens_m2m[jj]**2))*wdWj)
+            if not numpy.isnan((deltav2_m2m[jj]/densv2_obs_noise[jj])):
+                out+= (deltav2_m2m[jj]/densv2_obs_noise[jj]) \
+                    *((wv2mdWj/dens_m2m[jj])-(wv2_m2m[jj]/(dens_m2m[jj]**2))*wdWj)
     return -out
 
 # omega
