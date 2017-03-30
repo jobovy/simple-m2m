@@ -712,7 +712,6 @@ def sample_m2m(nsamples,
         phi_now+= omega_m2m*tnstep*kwargs.get('step',0.001)
         z_m2m, vz_m2m= Aphi_to_zvz(A_now,phi_now,omega_m2m)
         if fit_zsun:
-            print("Sampling zsun")
             # Rewind orbit, so we use same part for all zsun/omega
             phi_now-= omega_m2m*nstep_zsun*kwargs.get('step',0.001)
             z_m2m, vz_m2m= Aphi_to_zvz(A_now,phi_now,omega_m2m)
@@ -750,7 +749,6 @@ def sample_m2m(nsamples,
             phi_now+= omega_m2m*nstep_omega*kwargs.get('step',0.001)
             z_m2m, vz_m2m= Aphi_to_zvz(A_now,phi_now,omega_m2m)
         if fit_omega:
-            print("Sampling omega")
             for jj in range(nmh_omega):
                 # Do a MH step
                 omega_new= omega_m2m+numpy.random.normal()*sig_omega
