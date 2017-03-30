@@ -613,6 +613,7 @@ def sample_m2m(nsamples,
        Sample parameters using M2M optimization for the weights and Metropolis-Hastings for the other parameters on the harmonic-oscillator data
     INPUT:
        nsamples - number of samples from the ~PDF
+       fix_weights= (False) if True, don't sample the weights
 
        zsun parameters:
           sig_zsun= (0.005) if sampling zsun (fit_zsun=True), proposal stepsize for steps in zsun
@@ -643,7 +644,7 @@ def sample_m2m(nsamples,
     vz_out= numpy.empty_like(w_out)
     eps= kwargs.get('eps',0.1)
     nstep= kwargs.get('nstep',1000)
-
+    fix_weights= kwargs.pop('fix_weights',False)
     # zsun
     fit_zsun= kwargs.get('fit_zsun',False)
     kwargs['fit_zsun']= False # Turn off for weights fits
@@ -675,21 +676,25 @@ def sample_m2m(nsamples,
     z_m2m= z_init
     vz_m2m= vz_init
     for ii in tqdm.tqdm(range(nsamples)):
-        # Draw new observations
-        tdens_obs= dens_obs\
-            +numpy.random.normal(size=len(dens_obs))*dens_obs_noise
-        if not densv2_obs is None:
-            kwargs['densv2_obs']= densv2_obs\
-                +numpy.random.normal(size=len(densv2_obs))\
-                *kwargs.get('densv2_obs_noise')
-        tout= fit_m2m(kwargs['w_prior'],z_m2m,vz_m2m,omega_m2m,zsun_m2m,
-                      z_obs,tdens_obs,dens_obs_noise,
-                      **kwargs)
-        # Keep track of orbits
-        phi_now+= omega_m2m*kwargs.get('nstep',1000)*kwargs.get('step',0.001)
-        z_m2m, vz_m2m= Aphi_to_zvz(A_now,phi_now,omega_m2m)
-        if not densv2_obs is None: # Need to switch back to original data
-            kwargs['densv2_obs']= densv2_obs
+        if not fix_weights:
+            # Draw new observations
+            tdens_obs= dens_obs\
+                +numpy.random.normal(size=len(dens_obs))*dens_obs_noise
+            if not densv2_obs is None:
+                kwargs['densv2_obs']= densv2_obs\
+                    +numpy.random.normal(size=len(densv2_obs))\
+                    *kwargs.get('densv2_obs_noise')
+            tout= fit_m2m(kwargs['w_prior'],z_m2m,vz_m2m,omega_m2m,zsun_m2m,
+                          z_obs,tdens_obs,dens_obs_noise,
+                          **kwargs)
+            # Keep track of orbits
+            phi_now+= omega_m2m*kwargs.get('nstep',1000)\
+                *kwargs.get('step',0.001)
+            z_m2m, vz_m2m= Aphi_to_zvz(A_now,phi_now,omega_m2m)
+            if not densv2_obs is None: # Need to switch back to original data
+                kwargs['densv2_obs']= densv2_obs
+        else:
+            tout= [w_init]
         # Compute average chi^2
         if fit_zsun:
             tnstep= nstep_zsun
@@ -707,6 +712,7 @@ def sample_m2m(nsamples,
         phi_now+= omega_m2m*tnstep*kwargs.get('step',0.001)
         z_m2m, vz_m2m= Aphi_to_zvz(A_now,phi_now,omega_m2m)
         if fit_zsun:
+            print("Sampling zsun")
             # Rewind orbit, so we use same part for all zsun/omega
             phi_now-= omega_m2m*nstep_zsun*kwargs.get('step',0.001)
             z_m2m, vz_m2m= Aphi_to_zvz(A_now,phi_now,omega_m2m)
@@ -744,6 +750,7 @@ def sample_m2m(nsamples,
             phi_now+= omega_m2m*nstep_omega*kwargs.get('step',0.001)
             z_m2m, vz_m2m= Aphi_to_zvz(A_now,phi_now,omega_m2m)
         if fit_omega:
+            print("Sampling omega")
             for jj in range(nmh_omega):
                 # Do a MH step
                 omega_new= omega_m2m+numpy.random.normal()*sig_omega
