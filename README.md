@@ -21,7 +21,7 @@ code implements Harmonic Oscillator M2M (HOM2M).
 
 ## AUTHORS
 
-Jo Bovy - bovy at astro dot utoronto dot edu
+Jo Bovy - bovy at astro dot utoronto dot ca
 
 Daisuke Kawata - d dot kawata at ucl dot ac dot uk 
 
