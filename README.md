@@ -25,6 +25,8 @@ Jo Bovy - bovy at astro dot utoronto dot edu
 
 Daisuke Kawata - d dot kawata at ucl dot ac dot uk 
 
+Jason Hunt - jason dot hunt at utoronto dot ca
+
 ## Code
 
 ## 1. [py/hom2m.py](py/hom2m.py)
