@@ -39,7 +39,7 @@ parameters of a model, respectively.
 
 ## 2. [py/HOM2M.ipynb](py/HOM2M.ipynb)
 
-(render this notebook on [nbviewer](http://nbviewer.jupyter.org/github/jobovy/simple-m2m/blob/master/py/HOM2M.ipynb), where you can toggle the code and also watch an embeedded movie)
+(render this notebook on [nbviewer](http://nbviewer.jupyter.org/github/jobovy/simple-m2m/blob/master/py/HOM2M.ipynb), where you can toggle the code and also watch an embedded movie)
 
 This is the basic notebook for all of the mock data tests. Generates
 mock data and fits it with particle weights, nuisance parameters, and
@@ -48,7 +48,7 @@ sampling of all parameters.
 
 ## 3. [py/HOM2M_v2.ipynb](py/HOM2M_v2.ipynb)
 
-(render this notebook on [nbviewer](http://nbviewer.jupyter.org/github/jobovy/simple-m2m/blob/master/py/HOM2M_v2.ipynb), where you can toggle the code and also watch an embeedded movie)
+(render this notebook on [nbviewer](http://nbviewer.jupyter.org/github/jobovy/simple-m2m/blob/master/py/HOM2M_v2.ipynb), where you can toggle the code and also watch an embedded movie)
 
 Same as [py/HOM2M.ipynb](py/HOM2M.ipynb), except that the velocity
 observable is the mean-squared velocity rather than the
