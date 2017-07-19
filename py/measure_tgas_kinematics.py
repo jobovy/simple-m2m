@@ -220,9 +220,30 @@ def measure_kinematics_onepop(tgas,twomass,jk,dm,mj,spii,zbins,options,
         csvout.flush()
     return None
 
-def read_kinematics(filename):
+def read_kinematics(filename,dpop=None,dz=0.025):
     # Reads the kinematics file as written by this module
-    return None
+    if dpop is None:
+        try:
+            dpop= int(filename.split('dpop')[1].split('.csv')[0])
+        except:
+            raise ValueError('dpop= not set and could not be gleaned from the filename')
+    zbins= define_zbins(dz)
+    npop= 45//dpop+1
+    nz= len(zbins)
+    print(dpop,npop,nz)
+    out_sig2z= numpy.zeros((npop,nz))
+    out_sig2z_err= numpy.zeros((npop,nz))
+    out_sig2z[:,:]= numpy.nan
+    out_sig2z_err[:,:]= numpy.nan
+    with open(filename,'r') as csvfile:
+        csvreader= csv.reader(csvfile,delimiter=',')
+        for row in csvreader:
+            out_sig2z[int(row[0])//dpop,int(row[1])]= float(row[3])
+            out_sig2z_err[int(row[0])//dpop,int(row[1])]= float(row[4])
+    return (out_sig2z,out_sig2z_err)
+
+def define_zbins(dz):
+    return numpy.arange(-0.4125,0.425,dz)
 
 if __name__ == '__main__':
     parser= get_options()
@@ -233,9 +254,9 @@ if __name__ == '__main__':
         sys.exit(-1)
     csvout= open(options.outfilename,'a')
     csvwriter= csv.writer(csvout,delimiter=',')
+    zbins= define_zbins(options.dz)
     tgas, twomass, jk, dm, mj= load_data()
     sp, sp_jk_bins= load_spectraltypes()
-    zbins= numpy.arange(-0.4125,0.425,options.dz)
     for spii in range(options.start,45,options.dpop):
         # Select data for this bin
         jkmin= sp_jk_bins[spii]
