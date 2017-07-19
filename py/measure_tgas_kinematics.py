@@ -230,7 +230,6 @@ def read_kinematics(filename,dpop=None,dz=0.025):
     zbins= define_zbins(dz)
     npop= 45//dpop+1
     nz= len(zbins)
-    print(dpop,npop,nz)
     out_sig2z= numpy.zeros((npop,nz))
     out_sig2z_err= numpy.zeros((npop,nz))
     out_sig2z[:,:]= numpy.nan
