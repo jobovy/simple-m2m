@@ -14,9 +14,6 @@ numpy.random.seed(3)
 def get_options():
     usage = "usage: %prog [options]"
     parser = OptionParser(usage=usage)
-    #parser.add_option("--bool_option",action="store_true", 
-    #                  dest="bool_options",default=False,
-    #                  help="")
     # How to separate types, heights
     parser.add_option("--dpop",dest='dpop',default=10,type='int',
                       help="Width of stellar bins")
@@ -29,6 +26,9 @@ def get_options():
     parser.add_option("-b",dest='nboot',default=20,type='int',
                       help="Number of bootstrap samples to use")
     # Re-start options
+    parser.add_option("-r",action="store_true", 
+                      dest="restart",default=False,
+                      help="Restart, appends to existing output file")
     parser.add_option("--start",dest='start',default=0,type='int',
                       help="Index of the stellar type (for the given dpop) to start")
     parser.add_option("--startz",dest='startz',default=0,type='int',
@@ -181,7 +181,11 @@ def measure_kinematics_onepop(tgas,twomass,jk,dm,mj,spii,zbins,options,
     nmc= 10001
     vradec_cov= compute_vradec_cov_mc(tgas,nmc)
     # Fit each zbin
-    for ii in tqdm.trange(options.startz,len(zbins)-1):
+    if spii == options.start:
+        startz= options.startz
+    else:
+        startz= 0
+    for ii in tqdm.trange(startz,len(zbins)-1):
         indx= (XYZ[:,2] > zbins[ii])\
               *(XYZ[:,2] <= zbins[ii+1])\
               *(numpy.sqrt(XYZ[:,0]**2.+XYZ[:,1]**2.) < 0.2)
@@ -216,11 +220,15 @@ def measure_kinematics_onepop(tgas,twomass,jk,dm,mj,spii,zbins,options,
         csvout.flush()
     return None
 
+def read_kinematics(filename):
+    # Reads the kinematics file as written by this module
+    return None
+
 if __name__ == '__main__':
     parser= get_options()
     options,args= parser.parse_args()
     # Setup output
-    if os.path.exists(options.outfilename):
+    if not options.restart and os.path.exists(options.outfilename):
         print("Output filename %s already exists, exiting ...")
         sys.exit(-1)
     csvout= open(options.outfilename,'a')
