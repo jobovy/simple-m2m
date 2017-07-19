@@ -78,21 +78,21 @@ def load_spectraltypes():
     sp_mjmin= sp_mjmin[1:-1]
     return (sp, sp_jk_bins)
 
-def combined_sig2(amp,mean,covar):
-    indx= numpy.sqrt(covar) < 30.
+def combined_sig2(amp,mean,covar,maxcovar=30.):
+    indx= numpy.sqrt(covar) < maxcovar
     tamp= amp[indx]/numpy.sum(amp[indx])
     return (numpy.sum(tamp*(covar+mean**2.)[indx])-numpy.sum(tamp*mean[indx])**2.)
-def combined_k(amp,mean,covar):
-    indx= numpy.sqrt(covar) < 30.
+def combined_k(amp,mean,covar,maxcovar=30.):
+    indx= numpy.sqrt(covar) < maxcovar
     tamp= amp[indx]/numpy.sum(amp[indx])
     tmean= numpy.sum(tamp*mean[indx])
     return (numpy.sum(tamp*(mean**4.+6.*mean**2.*covar+3.*covar**2.)[indx])
             -4.*tmean*numpy.sum(tamp*(mean**3.+3.*mean*covar)[indx])
             +6.*tmean**2.*numpy.sum(tamp*(mean**2.+covar)[indx])
             -3.*tmean**4.
-           -3.*combined_sig2(amp,mean,covar)**2.)
+           -3.*combined_sig2(amp,mean,covar,maxcovar=maxcovar)**2.)
 
-def bootstrap(nboot,vrd,vrd_cov,proj,ngauss=2):
+def bootstrap(nboot,vrd,vrd_cov,proj,ngauss=2,maxcovar=30.):
     out= numpy.empty((2,nboot))
     for ii in range(nboot):
         # Draw w/ replacement
@@ -111,8 +111,10 @@ def bootstrap(nboot,vrd,vrd_cov,proj,ngauss=2):
         initcovar= numpy.array(initcovar)
         initmean= numpy.array(initmean)
         lnL= extreme_deconvolution(ydata,ycovar,initamp,initmean,initcovar,projection=proj[indx])
-        out[0,ii]= combined_sig2(initamp,initmean[:,2],initcovar[:,2,2])
-        out[1,ii]= combined_k(initamp,initmean[:,2],initcovar[:,2,2])
+        out[0,ii]= combined_sig2(initamp,initmean[:,2],initcovar[:,2,2],
+                                 maxcovar=maxcovar)
+        out[1,ii]= combined_k(initamp,initmean[:,2],initcovar[:,2,2],
+                              maxcovar=maxcovar)
     return out
 
 def compute_projection(tgas):
@@ -167,7 +169,7 @@ def compute_vradec_cov_mc(tgas,nmc):
         return vradec_cov
 
 def measure_kinematics_onepop(tgas,twomass,jk,dm,mj,spii,zbins,options,
-                              csvwriter,csvout):
+                              csvwriter,csvout,maxcovar=30.):
     # Compute XYZ
     lb= bovy_coords.radec_to_lb(tgas['ra'],tgas['dec'],degree=True,epoch=None)
     XYZ= bovy_coords.lbd_to_XYZ(lb[:,0],lb[:,1],1./tgas['parallax'],
@@ -207,11 +209,13 @@ def measure_kinematics_onepop(tgas,twomass,jk,dm,mj,spii,zbins,options,
         initmean= numpy.array(initmean)
         lnL= extreme_deconvolution(ydata,ycovar,initamp,initmean,initcovar,
                                    projection=proj[indx])
-        sig2z= combined_sig2(initamp,initmean[:,2],initcovar[:,2,2])
-        kurtz= combined_k(initamp,initmean[:,2],initcovar[:,2,2])
+        sig2z= combined_sig2(initamp,initmean[:,2],initcovar[:,2,2],
+                             maxcovar=maxcovar)
+        kurtz= combined_k(initamp,initmean[:,2],initcovar[:,2,2],
+                          maxcovar=maxcovar)
         sam= bootstrap(options.nboot,
                        vradec.T[indx],vradec_cov[indx],proj[indx],
-                       ngauss=options.ngauss)
+                       ngauss=options.ngauss,maxcovar=maxcovar)
         sig2z_err= 1.4826*numpy.median(numpy.fabs(sam[0]-numpy.median(sam[0])))
         kurtz_err= 1.4826*numpy.median(numpy.fabs(sam[1]-numpy.median(sam[1])))
         sig2kurtz_corr= numpy.corrcoef(sam)[0,1]
@@ -229,7 +233,7 @@ def read_kinematics(filename,dpop=None,dz=0.025):
             raise ValueError('dpop= not set and could not be gleaned from the filename')
     zbins= define_zbins(dz)
     npop= 45//dpop+1
-    nz= len(zbins)
+    nz= len(zbins)-1
     out_sig2z= numpy.zeros((npop,nz))
     out_sig2z_err= numpy.zeros((npop,nz))
     out_sig2z[:,:]= numpy.nan
@@ -241,7 +245,7 @@ def read_kinematics(filename,dpop=None,dz=0.025):
             out_sig2z_err[int(row[0])//dpop,int(row[1])]= float(row[4])
     return (out_sig2z,out_sig2z_err)
 
-def define_zbins(dz):
+def define_zbins(dz=0.025):
     return numpy.arange(-0.4125,0.425,dz)
 
 if __name__ == '__main__':
@@ -270,8 +274,10 @@ if __name__ == '__main__':
                        *(mj > main_sequence_cut_r(jk,tight=False))
         print("Found %i stars in TGAS with good parallaxes for stars in bin %i " \
               % (numpy.sum(good_sampling),spii))
+        if spii >= 20: maxcovar= 40.
+        else: maxcovar= 30.
         measure_kinematics_onepop(tgas[good_sampling],twomass[good_sampling],
                                   jk[good_sampling],dm[good_sampling],
                                   mj[good_sampling],spii,zbins,options,
-                                  csvwriter,csvout)
+                                  csvwriter,csvout,maxcovar=maxcovar)
         
